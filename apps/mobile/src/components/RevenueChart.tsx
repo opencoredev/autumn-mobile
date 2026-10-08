@@ -1,0 +1,158 @@
+import { useCallback, useMemo, useState } from "react";
+import { View, type LayoutChangeEvent } from "react-native";
+import { Gesture, GestureDetector } from "react-native-gesture-handler";
+import Animated, { FadeIn, useReducedMotion } from "react-native-reanimated";
+import Svg, { Defs, Line, LinearGradient, Path, Rect, Stop } from "react-native-svg";
+import { scheduleOnRN } from "react-native-worklets";
+import type { RevenueDay } from "@autumn/shared";
+import { selectionTick } from "../lib/celebrate";
+import { usePalette } from "../theme";
+
+const HEIGHT = 168;
+const TOP_PAD = 12;
+const BOTTOM_PAD = 4;
+
+type Point = { readonly x: number; readonly y: number };
+
+export function buildPoints(days: readonly RevenueDay[], width: number): Point[] {
+  if (days.length === 0 || width <= 0) return [];
+  const max = Math.max(...days.map((day) => day.amount), 0);
+  const usable = HEIGHT - TOP_PAD - BOTTOM_PAD;
+  const step = days.length > 1 ? width / (days.length - 1) : 0;
+  return days.map((day, index) => ({
+    x: index * step,
+    y: max > 0 ? TOP_PAD + usable - (Math.max(day.amount, 0) / max) * usable : HEIGHT - BOTTOM_PAD,
+  }));
+}
+
+function linePath(points: readonly Point[]): string {
+  return points.map((point, index) => `${index === 0 ? "M" : "L"}${point.x},${point.y}`).join(" ");
+}
+
+/**
+ * 30-day revenue area chart. Drag across it to scrub; the parent shows the
+ * scrubbed day's amount in place of the total.
+ */
+export function RevenueChart({
+  days,
+  onActiveIndexChange,
+}: {
+  readonly days: readonly RevenueDay[];
+  readonly onActiveIndexChange: (index: number | null) => void;
+}) {
+  const palette = usePalette();
+  const reduceMotion = useReducedMotion();
+  const [width, setWidth] = useState(0);
+  const [activeIndex, setActiveIndex] = useState<number | null>(null);
+
+  const points = useMemo(() => buildPoints(days, width), [days, width]);
+  const line = useMemo(() => linePath(points), [points]);
+  const area = useMemo(
+    () => (points.length > 0 ? `${line} L${width},${HEIGHT} L0,${HEIGHT} Z` : ""),
+    [line, points.length, width],
+  );
+
+  const update = useCallback(
+    (index: number | null) => {
+      setActiveIndex((previous) => {
+        if (previous !== index && index !== null) selectionTick();
+        return index;
+      });
+      onActiveIndexChange(index);
+    },
+    [onActiveIndexChange],
+  );
+
+  const count = days.length;
+  const gesture = useMemo(() => {
+    const indexAt = (x: number) => {
+      "worklet";
+      if (count < 2 || width <= 0) return 0;
+      const raw = Math.round((x / width) * (count - 1));
+      return Math.min(count - 1, Math.max(0, raw));
+    };
+    return (
+      Gesture.Pan()
+        // Horizontal drags scrub; vertical drags fall through to the page scroll.
+        .activeOffsetX([-6, 6])
+        .failOffsetY([-10, 10])
+        .onStart((event) => {
+          scheduleOnRN(update, indexAt(event.x));
+        })
+        .onUpdate((event) => {
+          scheduleOnRN(update, indexAt(event.x));
+        })
+        .onFinalize(() => {
+          scheduleOnRN(update, null);
+        })
+    );
+  }, [count, width, update]);
+
+  const onLayout = (event: LayoutChangeEvent) => setWidth(event.nativeEvent.layout.width);
+  const active = activeIndex === null ? null : points[activeIndex];
+
+  return (
+    <GestureDetector gesture={gesture}>
+      <View
+        onLayout={onLayout}
+        style={{ height: HEIGHT }}
+        accessibilityRole="adjustable"
+        accessibilityLabel="Revenue over the last 30 days. Drag to see each day."
+      >
+        {width > 0 ? (
+          <Animated.View {...(reduceMotion ? {} : { entering: FadeIn.duration(280) })}>
+            <Svg width={width} height={HEIGHT}>
+              <Defs>
+                <LinearGradient id="revenueFill" x1="0" y1="0" x2="0" y2="1">
+                  <Stop offset="0" stopColor={palette.accent} stopOpacity={0.32} />
+                  <Stop offset="1" stopColor={palette.accent} stopOpacity={0} />
+                </LinearGradient>
+              </Defs>
+              <Line
+                x1={0}
+                x2={width}
+                y1={HEIGHT - BOTTOM_PAD}
+                y2={HEIGHT - BOTTOM_PAD}
+                stroke={palette.hairline}
+                strokeWidth={1}
+              />
+              {area ? <Path d={area} fill="url(#revenueFill)" /> : null}
+              {line ? (
+                <Path
+                  d={line}
+                  stroke={palette.accentText}
+                  strokeWidth={2}
+                  fill="none"
+                  strokeLinejoin="round"
+                  strokeLinecap="round"
+                />
+              ) : null}
+              {active ? (
+                <>
+                  <Line
+                    x1={active.x}
+                    x2={active.x}
+                    y1={0}
+                    y2={HEIGHT}
+                    stroke={palette.textFaint}
+                    strokeWidth={1}
+                    strokeDasharray="2 3"
+                  />
+                  <Rect
+                    x={active.x - 4}
+                    y={active.y - 4}
+                    width={8}
+                    height={8}
+                    fill={palette.background}
+                    stroke={palette.accentText}
+                    strokeWidth={2}
+                  />
+                </>
+              ) : null}
+            </Svg>
+          </Animated.View>
+        ) : null}
+      </View>
+    </GestureDetector>
+  );
+}
