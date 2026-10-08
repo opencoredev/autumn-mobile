@@ -1,0 +1,15 @@
+# Copy to .dev.vars for `wrangler dev`. .dev.vars is gitignored; never commit real values.
+
+# 32 random bytes, base64. Generate with: openssl rand -base64 32
+KEY_ENCRYPTION_KEY=
+
+# Enables POST /v1/auth/dev so you can sign in without Google or Apple. Local only.
+ALLOW_DEV_LOGIN=true
+
+# Point the Worker at the local mock instead of Autumn and Expo (bun run mock).
+AUTUMN_API_BASE=http://127.0.0.1:8789
+EXPO_PUSH_URL=http://127.0.0.1:8789/mock/push
+PUBLIC_BASE_URL=http://127.0.0.1:8787
+
+# Optional: only if you enable enhanced push security in Expo.
+EXPO_ACCESS_TOKEN=

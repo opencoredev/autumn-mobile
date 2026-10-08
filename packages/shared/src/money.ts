@@ -2,24 +2,32 @@ import type { Money, PlanInterval } from "./contracts";
 
 const formatters = new Map<string, Intl.NumberFormat>();
 
-function formatter(currency: string, compact: boolean): Intl.NumberFormat {
-  const key = `${currency}:${compact}`;
+type Style = "compact" | "whole" | "cents";
+
+function formatter(currency: string, style: Style): Intl.NumberFormat {
+  const key = `${currency}:${style}`;
   const cached = formatters.get(key);
   if (cached) return cached;
+  const digits =
+    style === "compact"
+      ? { notation: "compact" as const, maximumFractionDigits: 1 }
+      : style === "whole"
+        ? { minimumFractionDigits: 0, maximumFractionDigits: 0 }
+        : { minimumFractionDigits: 2, maximumFractionDigits: 2 };
   const created = new Intl.NumberFormat("en-US", {
     style: "currency",
     currency: currency.toUpperCase(),
-    ...(compact
-      ? { notation: "compact", maximumFractionDigits: 1 }
-      : { minimumFractionDigits: 0, maximumFractionDigits: 2 }),
+    ...digits,
   });
   formatters.set(key, created);
   return created;
 }
 
-/** `$29`, `$29.99`, `€1,204.50`. Whole amounts drop the decimals. */
+/** `$29`, `$29.99`, `$31.50`, `€1,204.50`. Whole amounts drop the decimals. */
 export function formatMoney(money: Money, options: { compact?: boolean } = {}): string {
-  return formatter(money.currency, options.compact ?? false).format(money.amount);
+  if (options.compact) return formatter(money.currency, "compact").format(money.amount);
+  const whole = Math.abs(money.amount - Math.round(money.amount)) < 0.005;
+  return formatter(money.currency, whole ? "whole" : "cents").format(money.amount);
 }
 
 const INTERVAL_SUFFIX: Record<PlanInterval, string> = {
