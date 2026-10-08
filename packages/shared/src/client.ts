@@ -123,6 +123,9 @@ export function createApiClient(options: ApiClientOptions) {
       request({ method: "POST", path: "/v1/auth/google", body, schema: SessionResponseSchema }),
     signInWithApple: (body: AppleSignInRequest) =>
       request({ method: "POST", path: "/v1/auth/apple", body, schema: SessionResponseSchema }),
+    /** Local development only; the Worker answers 404 unless ALLOW_DEV_LOGIN is set. */
+    devSignIn: () =>
+      request({ method: "POST", path: "/v1/auth/dev", schema: SessionResponseSchema }),
     signOut: () => request({ method: "POST", path: "/v1/auth/logout", schema: OkResponseSchema }),
     me: () => request({ method: "GET", path: "/v1/me", schema: MeResponseSchema }),
 
