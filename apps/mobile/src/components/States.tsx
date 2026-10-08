@@ -5,13 +5,19 @@ import { Button } from "./Button";
 import { PixelIcon, type PixelIconName } from "./PixelIcon";
 import { Text } from "./Text";
 
-export function errorMessage(error: unknown): string {
+/**
+ * `keyEntry` is for forms where the user just typed a key, so a rejected key
+ * means "this key", not "the saved key".
+ */
+export function errorMessage(error: unknown, context: "default" | "keyEntry" = "default"): string {
   if (error instanceof ApiError) {
     switch (error.code) {
       case "network":
         return "Can't reach the server. Check your connection.";
       case "invalid_autumn_key":
-        return "Autumn rejected this org's secret key. Replace it in Settings.";
+        return context === "keyEntry"
+          ? "Autumn didn't accept this key. Copy a secret key (am_sk_…) from Autumn and try again."
+          : "Autumn rejected this org's saved key. Replace it under Settings → Organizations.";
       case "autumn_unavailable":
         return "Autumn isn't responding right now. Pull to retry.";
       default:

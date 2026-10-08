@@ -130,7 +130,7 @@ function OrderDetail({ org, invoiceId }: { readonly org: Org; readonly invoiceId
         {invoice.netPaid ? (
           <DetailRow label="Net paid" value={formatMoney(invoice.netPaid)} mono />
         ) : null}
-        <DetailRow label="Currency" value={invoice.total.currency} mono isLast />
+        <DetailRow label="Currency" value={invoice.total.currency.toUpperCase()} mono isLast />
       </Section>
 
       {invoice.hostedInvoiceUrl ? (

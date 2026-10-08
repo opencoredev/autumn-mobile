@@ -28,7 +28,7 @@ export default function NewOrgScreen() {
       }));
       setSecretKey("");
       setActiveOrgId(org.id);
-      router.dismissAll();
+      if (router.canDismiss()) router.dismissAll();
       router.push(`/orgs/${org.id}/webhook`);
     },
   });
@@ -68,7 +68,7 @@ export default function NewOrgScreen() {
           textContentType="none"
           autoComplete="off"
           importantForAutofill="no"
-          error={create.isError ? errorMessage(create.error) : null}
+          error={create.isError ? errorMessage(create.error, "keyEntry") : null}
           hint="Encrypted on the server. It's never shown again; you'll only see its last four characters."
         />
         <View style={{ gap: space.sm }}>

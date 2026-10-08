@@ -85,7 +85,8 @@ function CustomerDetail({ org, customerId }: { readonly org: Org; readonly custo
                 <SubscriptionRow
                   key={subscription.id}
                   orgId={org.id}
-                  subscription={{ ...subscription, customerName: data.customer.name }}
+                  subscription={subscription}
+                  withinCustomer
                   isLast={index === data.subscriptions.length - 1}
                 />
               ))
@@ -98,7 +99,8 @@ function CustomerDetail({ org, customerId }: { readonly org: Org; readonly custo
                 <PurchaseRow
                   key={purchase.id}
                   orgId={org.id}
-                  purchase={{ ...purchase, customerName: data.customer.name }}
+                  purchase={purchase}
+                  withinCustomer
                   isLast={index === data.purchases.length - 1}
                 />
               ))}
@@ -113,7 +115,8 @@ function CustomerDetail({ org, customerId }: { readonly org: Org; readonly custo
                 <OrderRow
                   key={invoice.id}
                   orgId={org.id}
-                  invoice={{ ...invoice, customerName: data.customer.name }}
+                  invoice={invoice}
+                  withinCustomer
                   isLast={index === data.invoices.length - 1}
                 />
               ))

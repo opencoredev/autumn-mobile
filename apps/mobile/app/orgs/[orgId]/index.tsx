@@ -141,7 +141,7 @@ function OrgDetail({ org }: { readonly org: Org }) {
               mono
               textContentType="none"
               autoComplete="off"
-              error={replaceKey.isError ? errorMessage(replaceKey.error) : null}
+              error={replaceKey.isError ? errorMessage(replaceKey.error, "keyEntry") : null}
               hint="The new key is checked with a read-only call, then encrypted. The old one is discarded."
             />
             <Button

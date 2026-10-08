@@ -46,7 +46,13 @@ function SearchField({
           autoCorrect={false}
           returnKeyType="search"
           accessibilityLabel="Search customers"
-          style={{ flex: 1, color: palette.text, fontFamily: fonts.regular, fontSize: 15 }}
+          style={{
+            flex: 1,
+            color: palette.text,
+            fontFamily: fonts.regular,
+            fontSize: 15,
+            outlineWidth: 0,
+          }}
         />
         {value ? (
           <Pressable onPress={() => onChange("")} hitSlop={10} accessibilityLabel="Clear search">

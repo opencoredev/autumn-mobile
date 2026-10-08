@@ -27,9 +27,11 @@ export default function OrgSwitcherSheet() {
             onPress={() => {
               selectionTick();
               setActiveOrgId(org.id);
-              router.back();
+              if (router.canGoBack()) router.back();
+              else router.replace("/");
             }}
             accessibilityRole="button"
+            accessibilityLabel={`${org.name}, ${org.keyEnv === "live" ? "live" : "sandbox"} key ending ${org.keySuffix}`}
             accessibilityState={{ selected: active }}
             style={({ pressed }) => ({
               flexDirection: "row",
@@ -55,7 +57,7 @@ export default function OrgSwitcherSheet() {
       })}
       <Pressable
         onPress={() => {
-          router.back();
+          if (router.canGoBack()) router.back();
           router.push("/orgs/new");
         }}
         accessibilityRole="button"

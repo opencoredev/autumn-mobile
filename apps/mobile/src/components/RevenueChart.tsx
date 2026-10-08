@@ -25,8 +25,45 @@ export function buildPoints(days: readonly RevenueDay[], width: number): Point[]
   }));
 }
 
-function linePath(points: readonly Point[]): string {
-  return points.map((point, index) => `${index === 0 ? "M" : "L"}${point.x},${point.y}`).join(" ");
+/**
+ * Monotone cubic (Fritsch–Carlson) path: smooth like Polar's chart, but it
+ * never overshoots, so a zero day never dips below the baseline.
+ */
+export function linePath(points: readonly Point[]): string {
+  const first = points[0];
+  if (!first) return "";
+  if (points.length < 3) {
+    return points
+      .map((point, index) => `${index === 0 ? "M" : "L"}${point.x},${point.y}`)
+      .join(" ");
+  }
+  const count = points.length;
+  const slopes: number[] = [];
+  for (let i = 0; i < count - 1; i++) {
+    const a = points[i];
+    const b = points[i + 1];
+    if (!a || !b) continue;
+    slopes.push((b.y - a.y) / (b.x - a.x || 1));
+  }
+  const tangents = points.map((_, i) => {
+    if (i === 0) return slopes[0] ?? 0;
+    if (i === count - 1) return slopes[count - 2] ?? 0;
+    const before = slopes[i - 1] ?? 0;
+    const after = slopes[i] ?? 0;
+    if (before * after <= 0) return 0;
+    return (2 * before * after) / (before + after);
+  });
+  let d = `M${first.x},${first.y}`;
+  for (let i = 0; i < count - 1; i++) {
+    const a = points[i];
+    const b = points[i + 1];
+    if (!a || !b) continue;
+    const dx = (b.x - a.x) / 3;
+    const c1y = a.y + (tangents[i] ?? 0) * dx;
+    const c2y = b.y - (tangents[i + 1] ?? 0) * dx;
+    d += ` C${a.x + dx},${c1y} ${b.x - dx},${c2y} ${b.x},${b.y}`;
+  }
+  return d;
 }
 
 /**

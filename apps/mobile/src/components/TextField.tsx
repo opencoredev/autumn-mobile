@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { TextInput, View, type TextInputProps } from "react-native";
 import { fonts, radius, space, usePalette } from "../theme";
 import { Text } from "./Text";
@@ -15,6 +16,7 @@ export function TextField({
   readonly mono?: boolean;
 }) {
   const palette = usePalette();
+  const [focused, setFocused] = useState(false);
   return (
     <View style={{ gap: space.sm }}>
       <Text variant="label">{label}</Text>
@@ -23,12 +25,21 @@ export function TextField({
         selectionColor={palette.accent}
         autoCorrect={false}
         {...input}
+        onFocus={(event) => {
+          setFocused(true);
+          input.onFocus?.(event);
+        }}
+        onBlur={(event) => {
+          setFocused(false);
+          input.onBlur?.(event);
+        }}
         accessibilityLabel={label}
         style={{
           height: 50,
           borderRadius: radius.md,
           borderWidth: 1,
-          borderColor: error ? palette.danger : palette.hairline,
+          borderColor: error ? palette.danger : focused ? palette.accent : palette.hairline,
+          outlineWidth: 0,
           backgroundColor: palette.surface,
           paddingHorizontal: space.md,
           color: palette.text,

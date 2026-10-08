@@ -25,7 +25,9 @@ function PlanRows({
 }) {
   const router = useRouter();
   return plans.map((plan, index) => {
-    const meta = [intervalWord(plan), trialLabel(plan), plan.group].filter(Boolean).join(" · ");
+    // The price column already says "Free", so free plans describe themselves instead.
+    const lead = plan.isFree ? (plan.description ?? "No charge") : intervalWord(plan);
+    const meta = [lead, trialLabel(plan), plan.group].filter(Boolean).join(" · ");
     return (
       <Row
         key={plan.id}

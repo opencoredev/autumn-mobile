@@ -51,6 +51,11 @@ function Step({
   );
 }
 
+/** Lets long URLs wrap after slashes instead of overflowing. Display only; copy uses the raw value. */
+function breakable(value: string): string {
+  return value.replace(/([/._-])/g, "$1\u200B");
+}
+
 function CopyBox({ value, label }: { readonly value: string; readonly label: string }) {
   const palette = usePalette();
   const [copied, setCopied] = useState(false);
@@ -76,8 +81,8 @@ function CopyBox({ value, label }: { readonly value: string; readonly label: str
         backgroundColor: pressed ? palette.elevated : palette.surface,
       })}
     >
-      <Text variant="mono" selectable style={{ flex: 1, fontSize: 12, lineHeight: 18 }}>
-        {value}
+      <Text variant="mono" style={{ flex: 1, minWidth: 0, fontSize: 12, lineHeight: 18 }}>
+        {breakable(value)}
       </Text>
       {copied ? (
         <Text variant="label" tone="accent">
