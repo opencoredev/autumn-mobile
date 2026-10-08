@@ -7,14 +7,18 @@
     "dev": "wrangler dev",
     "typecheck": "tsc --noEmit",
     "lint": "oxlint src",
-    "build": "wrangler deploy --dry-run"
+    "build": "wrangler deploy --dry-run",
+    "test": "vitest run --maxWorkers=4"
   },
   "dependencies": {
     "@autumn/shared": "workspace:*",
-    "hono": "^4.13.13"
+    "hono": "^4.13.13",
+    "jose": "^6.1.0",
+    "zod": "^4.6.5"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^5.20261008.1",
+    "vitest": "^3.2.4",
     "wrangler": "^4.149.0"
   }
 }

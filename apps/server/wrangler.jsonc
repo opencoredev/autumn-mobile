@@ -4,5 +4,19 @@
   "main": "src/index.ts",
   "compatibility_date": "2026-10-08",
   "observability": { "enabled": false },
-  // Add D1/KV bindings and secrets here when the backend is implemented.
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "autumn-mobile",
+      "database_id": "REPLACE_WITH_DATABASE_ID",
+      "migrations_dir": "migrations",
+    },
+  ],
+  "kv_namespaces": [{ "binding": "CACHE", "id": "REPLACE_WITH_KV_ID" }],
+  "vars": {
+    "AUTUMN_API_BASE": "https://api.useautumn.com",
+    "PUBLIC_BASE_URL": "https://REPLACE_WITH_PUBLIC_HOST",
+    "GOOGLE_CLIENT_IDS": "",
+    "APPLE_AUDIENCES": "com.leo.autumndashboard",
+  },
 }
