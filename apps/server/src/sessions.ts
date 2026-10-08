@@ -1,4 +1,4 @@
-import type { User } from "@autumn/shared";
+import type { AuthProvider, User } from "@autumn/shared";
 import { randomToken, sha256 } from "./crypto";
 import { userFromRow } from "./db";
 
@@ -10,15 +10,15 @@ export const SESSION_TTL_MS = 60 * 24 * 60 * 60 * 1000;
  */
 export async function issueSession(
   db: D1Database,
-  args: { userId: string; now: number },
+  args: { userId: string; provider: AuthProvider; now: number },
 ): Promise<{ token: string; expiresAt: number }> {
   const token = randomToken(32);
   const expiresAt = args.now + SESSION_TTL_MS;
   await db
     .prepare(
-      "INSERT INTO sessions (token_hash, user_id, created_at, expires_at) VALUES (?, ?, ?, ?)",
+      "INSERT INTO sessions (token_hash, user_id, provider, created_at, expires_at) VALUES (?, ?, ?, ?, ?)",
     )
-    .bind(await sha256(token), args.userId, args.now, expiresAt)
+    .bind(await sha256(token), args.userId, args.provider, args.now, expiresAt)
     .run();
   return { token, expiresAt };
 }
@@ -29,7 +29,8 @@ export async function userForToken(
 ): Promise<User | null> {
   const row = await db
     .prepare(
-      `SELECT u.* FROM sessions s JOIN users u ON u.id = s.user_id
+      `SELECT u.id, COALESCE(s.provider, u.provider) AS provider, u.display_name, u.created_at
+       FROM sessions s JOIN users u ON u.id = s.user_id
        WHERE s.token_hash = ? AND s.expires_at > ?`,
     )
     .bind(await sha256(args.token), args.now)

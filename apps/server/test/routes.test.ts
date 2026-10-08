@@ -151,6 +151,86 @@ describe("auth", () => {
     ).toBe(401);
   });
 
+  describe("linking Google and Apple", () => {
+    // Built at runtime so no address literal lives in the repo.
+    const address = (name: string) => [name, "example.test"].join("@");
+    const google = (args: { subject: string; email?: string; emailVerified?: boolean }) =>
+      h.identity.sign({
+        issuer: "https://accounts.google.com",
+        audience: GOOGLE_AUDIENCE,
+        ...args,
+      });
+    const apple = (args: { subject: string; email?: string; emailVerified?: "true" | "false" }) =>
+      h.identity.sign({ issuer: "https://appleid.apple.com", audience: APPLE_AUDIENCE, ...args });
+    const signInGoogle = async (idToken: string) =>
+      parse(
+        SessionResponseSchema,
+        await h.request("/v1/auth/google", { method: "POST", body: { idToken } }),
+      );
+    const signInApple = async (identityToken: string) =>
+      parse(
+        SessionResponseSchema,
+        await h.request("/v1/auth/apple", {
+          method: "POST",
+          body: { identityToken, displayName: null },
+        }),
+      );
+
+    it("joins sign-ins that share a verified email, in either order, case-insensitively", async () => {
+      const viaGoogle = await signInGoogle(
+        await google({ subject: "g-link", email: address("Robin") }),
+      );
+      const org = await createOrg(viaGoogle.token);
+      const viaApple = await signInApple(
+        await apple({ subject: "a-link", email: address("robin"), emailVerified: "true" }),
+      );
+      expect(viaApple.user.id).toBe(viaGoogle.user.id);
+      expect(viaApple.user.provider).toBe("apple");
+      const orgs = parse(
+        OrgListResponseSchema,
+        await h.request("/v1/orgs", { token: viaApple.token }),
+      ).orgs;
+      expect(orgs.map((item) => item.id)).toEqual([org.id]);
+      const me = parse(MeResponseSchema, await h.request("/v1/me", { token: viaApple.token }));
+      expect(me.user.provider).toBe("apple");
+      const again = await signInGoogle(
+        await google({ subject: "g-link", email: address("robin") }),
+      );
+      expect(again.user.id).toBe(viaGoogle.user.id);
+    });
+
+    it("keeps accounts apart for unverified, different, or missing emails", async () => {
+      const base = await signInGoogle(await google({ subject: "g-1", email: address("sam") }));
+      const unverified = await signInApple(
+        await apple({ subject: "a-1", email: address("sam"), emailVerified: "false" }),
+      );
+      const relay = await signInApple(
+        await apple({ subject: "a-2", email: address("x7k2relay"), emailVerified: "true" }),
+      );
+      const noEmail = await signInApple(await apple({ subject: "a-3" }));
+      const ids = new Set([base, unverified, relay, noEmail].map((session) => session.user.id));
+      expect(ids.size).toBe(4);
+    });
+
+    it("stores only a keyed hash, never the email", async () => {
+      const email = address("private.person");
+      await signInGoogle(await google({ subject: "g-hash", email }));
+      for (const table of ["identities", "users", "sessions"]) {
+        const rows = JSON.stringify(
+          (await h.env.DB.prepare(`SELECT * FROM ${table}`).all()).results,
+        );
+        expect(rows).not.toContain(email);
+        expect(rows).not.toContain("@");
+      }
+      const row = await h.env.DB.prepare(
+        "SELECT email_hash FROM identities WHERE provider_subject = ?",
+      )
+        .bind("g-hash")
+        .first<{ email_hash: string }>();
+      expect(row?.email_hash).toMatch(/^[A-Za-z0-9+/=]{40,}$/);
+    });
+  });
+
   it("logout revokes the session", async () => {
     const token = await h.devLogin();
     expect((await h.request("/v1/orgs", { token })).status).toBe(200);
@@ -353,6 +433,40 @@ describe("dashboard data", () => {
     expect(invoice.invoice.id).toBe("inv_demo_3");
     expect((await h.request(`${base}/invoices/inv_missing`, { token })).status).toBe(404);
     expect((await h.request(`${base}/customers/cus_missing`, { token })).status).toBe(404);
+  });
+
+  it("counts every live subscription, well past 2,000", async () => {
+    const token = await h.devLogin();
+    const org = await createOrg(token);
+    const template = h.fake.data.subscriptions[1]!;
+    const extra = Array.from({ length: 2600 }, (_, index) => ({
+      ...template,
+      id: `sub_bulk_${index}`,
+      add_on: false,
+      past_due: false,
+      canceled_at: null,
+      expires_at: null,
+      trial_ends_at: index % 4 === 0 ? NOW + 86_400_000 : null,
+      started_at: NOW - 400 * 86_400_000,
+      created_at: NOW - 400 * 86_400_000,
+    }));
+    const before = parse(
+      OverviewResponseSchema,
+      await h.request(`/v1/orgs/${org.id}/overview`, { token }),
+    );
+    h.fake.data.subscriptions.push(...extra);
+    await h.env.CACHE.delete(`dashboard:v3:${org.id}`);
+    const after = parse(
+      OverviewResponseSchema,
+      await h.request(`/v1/orgs/${org.id}/overview`, { token }),
+    );
+    expect(after.subscriptionCountsTruncated).toBe(false);
+    expect(after.trialingSubscriptions - before.trialingSubscriptions).toBe(650);
+    expect(after.activeSubscriptions - before.activeSubscriptions).toBe(1950);
+    // Old bulk rows don't push the genuinely newest subscriptions out of the list.
+    expect(after.recentSubscriptions.map((sub) => sub.id)).toEqual(
+      before.recentSubscriptions.map((sub) => sub.id),
+    );
   });
 
   it("caches revenue and recent orders briefly, and a webhook clears them", async () => {

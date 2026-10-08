@@ -47,6 +47,8 @@ bun run build        # Worker dry-run bundle and Expo export (iOS, Android, web)
 
 Cloudflare Secrets Store was considered and rejected. Workers can only read Secrets Store values through bindings; secrets are created out of band per account (dashboard, Wrangler or the API with an account token), so a Worker can't write a new per-user secret when someone pastes a key. Encrypting in D1 with a master key held as a Worker secret gives the same "key never at rest in plaintext" property and works for any number of users. Rotation is supported through the `key_version` column.
 
+If you sign in with Google on one device and Apple on another using the same verified email, you get one account with the same orgs and settings. The Worker stores only a keyed hash of the email, never the address.
+
 The Worker never logs keys, signing secrets, ID tokens or session tokens, and the Autumn client refuses any path other than the six read endpoints it needs.
 
 ## The mobile app

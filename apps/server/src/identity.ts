@@ -1,12 +1,15 @@
 import { createRemoteJWKSet, jwtVerify, type JWTVerifyGetKey } from "jose";
 import type { AuthProvider } from "@autumn/shared";
 
-/** Verifies a provider ID token and returns its subject, or null when invalid. */
+/** What a valid ID token proves. `email` is set only when the provider verified it. */
+export type VerifiedIdentity = { subject: string; email: string | null };
+
+/** Verifies a provider ID token, or returns null when it's invalid. */
 export type IdentityVerifier = (args: {
   provider: AuthProvider;
   token: string;
   audiences: readonly string[];
-}) => Promise<{ subject: string } | null>;
+}) => Promise<VerifiedIdentity | null>;
 
 const ISSUERS: Record<AuthProvider, string[]> = {
   google: ["accounts.google.com", "https://accounts.google.com"],
@@ -33,9 +36,11 @@ export function createIdentityVerifier(
         audience: [...audiences],
         algorithms: ["RS256", "ES256"],
       });
-      return typeof payload.sub === "string" && payload.sub.length > 0
-        ? { subject: payload.sub }
-        : null;
+      if (typeof payload.sub !== "string" || payload.sub.length === 0) return null;
+      // Apple sends email_verified as the string "true"; Google as a boolean.
+      const verified = payload.email_verified === true || payload.email_verified === "true";
+      const email = verified && typeof payload.email === "string" ? payload.email : null;
+      return { subject: payload.sub, email };
     } catch {
       return null;
     }

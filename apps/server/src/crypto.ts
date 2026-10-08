@@ -24,6 +24,31 @@ export async function importEncryptionKey(value: string): Promise<CryptoKey> {
   if (raw.byteLength !== 32) throw new Error("KEY_ENCRYPTION_KEY must decode to exactly 32 bytes.");
   return crypto.subtle.importKey("raw", bytesBuffer(raw), "AES-GCM", false, ["encrypt", "decrypt"]);
 }
+/**
+ * Keyed, one-way fingerprint of an email used only to link sign-ins. The HMAC
+ * key is derived from the master key with HKDF, so it never doubles as the
+ * AES key, and the hash can't be reversed or matched without the secret.
+ */
+export async function emailLinkHash(args: { masterKey: string; email: string }): Promise<string> {
+  const raw = unb64(args.masterKey.trim());
+  const base = await crypto.subtle.importKey("raw", bytesBuffer(raw), "HKDF", false, ["deriveKey"]);
+  const hmacKey = await crypto.subtle.deriveKey(
+    {
+      name: "HKDF",
+      hash: "SHA-256",
+      salt: bytesBuffer(encoder.encode("autumn-mobile")),
+      info: bytesBuffer(encoder.encode("email-link-v1")),
+    },
+    base,
+    { name: "HMAC", hash: "SHA-256", length: 256 },
+    false,
+    ["sign"],
+  );
+  const normalized = args.email.trim().toLowerCase();
+  const mac = await crypto.subtle.sign("HMAC", hmacKey, bytesBuffer(encoder.encode(normalized)));
+  return b64(new Uint8Array(mac));
+}
+
 export async function encryptSecret(args: {
   value: string;
   key: CryptoKey;

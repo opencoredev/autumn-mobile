@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { exportJWK, generateKeyPair, SignJWT, createLocalJWKSet, type JWK } from "jose";
 import { getPlatformProxy } from "wrangler";
 import { createApp } from "../src/app";
@@ -27,8 +27,14 @@ export async function createIdentityKeys() {
     audience: string;
     subject: string;
     expiresIn?: string;
+    email?: string;
+    emailVerified?: boolean | "true" | "false";
   }) {
-    return new SignJWT({})
+    const claims =
+      args.email === undefined
+        ? {}
+        : { email: args.email, email_verified: args.emailVerified ?? true };
+    return new SignJWT(claims)
       .setProtectedHeader({ alg: "RS256", kid: "test-key" })
       .setIssuer(args.issuer)
       .setAudience(args.audience)
@@ -41,12 +47,21 @@ export async function createIdentityKeys() {
 }
 
 async function applyMigrations(db: D1Database): Promise<void> {
-  const sql = readFileSync(new URL("../migrations/0001_init.sql", import.meta.url), "utf8");
-  const statements = sql
-    .split(";")
-    .map((statement) => statement.trim())
-    .filter((statement) => statement.length > 0);
-  for (const statement of statements) await db.prepare(statement).run();
+  const dir = new URL("../migrations/", import.meta.url);
+  for (const file of readdirSync(dir)
+    .filter((name) => name.endsWith(".sql"))
+    .sort()) {
+    const sql = readFileSync(new URL(file, dir), "utf8")
+      .split("\n")
+      .filter((line) => !line.trim().startsWith("--"))
+      .join("\n");
+    for (const statement of sql
+      .split(";")
+      .map((part) => part.trim())
+      .filter(Boolean)) {
+      await db.prepare(statement).run();
+    }
+  }
 }
 
 /**

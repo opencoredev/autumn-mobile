@@ -58,13 +58,15 @@ Autumn secret keys and webhook signing secrets are encrypted with AES-256-GCM be
 
 **Why not Cloudflare Secrets Store?** Workers read Secrets Store values through bindings, and secrets are created out of band (dashboard, Wrangler, or the API with an account token). A Worker can't create a secret at runtime when a user pastes a key, and per-user secrets don't fit an account-level store. Encrypting in D1 under one master key held as a Worker secret gives the same property, no plaintext keys at rest, for any number of users.
 
+Google and Apple sign-ins that share a provider-verified email become one account, whichever comes first. The Worker never stores the email: it keeps an HMAC of the lowercased address, keyed by an HKDF-derived key from `KEY_ENCRYPTION_KEY`, in the `identities` table and compares hashes. Unverified emails and Apple "Hide My Email" relay addresses never link. Rotating `KEY_ENCRYPTION_KEY` changes the hashes, so existing accounts keep working but won't auto-link to a new provider afterward.
+
 Sessions are 32 random bytes. D1 stores only their SHA-256 hash; they expire after 60 days and logout deletes them. The Worker never logs keys, secrets, ID tokens or session tokens, and its error handler never echoes internal errors.
 
 ## Revenue
 
 Autumn has no revenue endpoint, so the overview sums invoices (`src/revenue.ts`). It pages through every invoice (1,000 per page, up to 20 pages) because Autumn doesn't document the list order; the same pass gives the ten newest orders. For each paid invoice created in the last 30 UTC days it adds `amount_paid − refunded_amount`, falling back to `total` when `amount_paid` is null, which is the realized-revenue formula from Autumn's own docs. Amounts are in major units. Results are grouped per currency (largest first), every day is zero-filled, and `truncated: true` means the page cap was hit. Revenue and recent orders are cached in KV for 5 minutes and cleared whenever a verified webhook arrives for the org, so a new sale shows up on the next refresh. Plans are cached for 10 minutes, customer names for 5.
 
-Active and trialing counts read up to 2,000 subscriptions (10 pages of 200); larger orgs will see counts capped there.
+Active and trialing counts read every live subscription (Autumn's `active` status, which includes trials, pending cancellations and past-due plans), 200 per call, in the same cached pass. The page limits (100 pages of invoices, 500 of subscriptions) are safety stops far above real orgs; if one is ever hit the response says so and the app shows the count as `N+`. Every page is a Cloudflare subrequest: the Free plan allows 50 per request, enough for roughly 5,000 subscriptions alongside revenue; the Paid plan allows 10,000.
 
 Plans don't carry a currency in Autumn's API, so plan prices are shown in the org's main revenue currency, defaulting to USD.
 
