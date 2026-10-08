@@ -1,140 +1,212 @@
-import { formatMoney } from "@autumn/shared";
-import type { NotificationSettings, NotificationKind, PushData } from "@autumn/shared";
-export type PlanInfo = {
-  id: string;
-  name: string;
-  amount: number | null;
+import { z } from "zod";
+import {
+  formatMoney,
+  type Money,
+  type NotificationKind,
+  type NotificationSettings,
+  type Plan,
+  type PushData,
+} from "@autumn/shared";
+import { InvoiceRaw } from "./autumn/schemas";
+
+/** Webhook payloads from Autumn (Svix envelope `{ type, data }`). */
+
+const nullishNumber = z
+  .number()
+  .nullish()
+  .transform((value) => value ?? null);
+
+const PlanChange = z.object({
+  action: z.enum(["activated", "scheduled", "updated", "expired"]),
+  subscription: z
+    .object({
+      plan_id: z.string(),
+      status: z.enum(["active", "scheduled", "expired"]),
+      canceled_at: nullishNumber,
+      trial_ends_at: nullishNumber,
+      started_at: nullishNumber,
+    })
+    .optional(),
+  purchase: z
+    .object({ plan_id: z.string(), status: z.enum(["active", "scheduled", "expired"]) })
+    .optional(),
+  previous_attributes: z
+    .object({ canceled_at: z.number().nullable().optional() })
+    .nullish()
+    .transform((value) => value ?? null),
+});
+
+export const BillingUpdated = z.object({
+  type: z.literal("billing.updated"),
+  data: z.object({
+    customer_id: z.string(),
+    plan_changes: z.array(PlanChange),
+    tags: z.array(z.string()).default([]),
+  }),
+});
+
+export const InvoiceFinalized = z.object({
+  type: z.literal("invoice.finalized"),
+  // The body is the invoice exactly as invoices.list returns it.
+  data: InvoiceRaw,
+});
+
+export const WebhookEvent = z.discriminatedUnion("type", [BillingUpdated, InvoiceFinalized]);
+export type WebhookEvent = z.infer<typeof WebhookEvent>;
+
+export const RENEWAL_GRACE_MS = 60 * 60 * 1000;
+
+type Org = { readonly id: string; readonly name: string };
+
+type Candidate = {
+  kind: Exclude<NotificationKind, "test">;
+  plan: Plan;
+  amount: Money | null;
+  customerId: string;
+  path: string;
+};
+
+const SETTING_FOR: Record<Candidate["kind"], keyof NotificationSettings> = {
+  purchase: "purchases",
+  subscription: "subscriptions",
+  trial: "trials",
+  renewal: "renewals",
+  cancellation: "cancellations",
+};
+
+function titleFor(candidate: Candidate): string {
+  const name = candidate.plan.name;
+  const price = candidate.amount ? `${formatMoney(candidate.amount)} ` : "";
+  switch (candidate.kind) {
+    case "purchase":
+      return `New purchase · ${price}${name}`;
+    case "subscription":
+      return `New subscription · ${price}${name}`;
+    case "trial":
+      return `New trial · ${name}`;
+    case "renewal":
+      return `Renewal · ${price}${name}`;
+    case "cancellation":
+      return `Subscription canceled · ${name}`;
+    default: {
+      const _exhaustive: never = candidate.kind;
+      return _exhaustive;
+    }
+  }
+}
+
+/** True when a plan change just set `canceled_at` (previously null, now a time). */
+function justCanceled(change: z.infer<typeof PlanChange>): boolean {
+  const previous = change.previous_attributes;
+  if (!previous || !("canceled_at" in previous)) return false;
+  return previous.canceled_at === null && typeof change.subscription?.canceled_at === "number";
+}
+
+function planPrice(plan: Plan, currency: string): Money | null {
+  return plan.price && !plan.isFree ? { amount: plan.price.amount, currency } : null;
+}
+
+function candidatesFor(args: {
+  event: WebhookEvent;
+  org: Org;
+  plans: ReadonlyMap<string, Plan>;
   currency: string;
-  isFree: boolean;
-  interval?: string;
-};
-export type BillingEvent = {
-  type: "billing.updated" | "invoice.finalized";
-  data: {
-    customer_id: string;
-    plan_changes?: Array<{
-      action: string;
-      subscription?: {
-        plan_id: string;
-        status: string;
-        past_due?: boolean;
-        started_at?: number;
-        canceled_at?: number | null;
-        trial_ends_at?: number | null;
-      };
-      purchase?: { plan_id: string; status: string; expires_at?: number | null };
-    }>;
-    tags?: string[];
-    invoice?: {
-      id: string;
-      plan_ids?: string[];
-      started_at?: number;
-      created_at?: number;
-      status?: string;
-      one_off?: boolean;
-    };
-    previous_attributes?: { canceled_at?: number | null };
-  };
-};
-export type Classified = PushData;
+  now: number;
+  /** For invoice.finalized: when the customer's subscription to each plan started. */
+  subscriptionStartedAt: ReadonlyMap<string, number>;
+}): Candidate[] {
+  const { event, org } = args;
+  if (event.type === "invoice.finalized") {
+    const invoice = event.data;
+    if (invoice.total <= 0 || !invoice.customer_id) return [];
+    for (const planId of invoice.plan_ids) {
+      const plan = args.plans.get(planId);
+      // Recurring means any plan that isn't one-off, including usage-only plans.
+      if (!plan || plan.price?.interval === "one_off") continue;
+      const startedAt = args.subscriptionStartedAt.get(planId);
+      // A first invoice lands within moments of the subscription starting;
+      // `billing.updated` already announced that one as a new subscription.
+      if (startedAt === undefined || invoice.created_at - startedAt <= RENEWAL_GRACE_MS) continue;
+      return [
+        {
+          kind: "renewal",
+          plan,
+          amount: { amount: invoice.total, currency: invoice.currency.toUpperCase() },
+          customerId: invoice.customer_id,
+          path: `/org/${org.id}/order/${encodeURIComponent(invoice.id)}`,
+        },
+      ];
+    }
+    return [];
+  }
+
+  const customerId = event.data.customer_id;
+  const path = `/org/${org.id}/customer/${encodeURIComponent(customerId)}`;
+  const trialEnded = event.data.tags.includes("trial_ended");
+  return event.data.plan_changes.flatMap((change): Candidate[] => {
+    const planId = change.purchase?.plan_id ?? change.subscription?.plan_id;
+    const plan = planId ? args.plans.get(planId) : undefined;
+    if (!plan) return [];
+    const base = { plan, customerId, path, amount: planPrice(plan, args.currency) };
+    if (change.action === "activated" && change.purchase) return [{ ...base, kind: "purchase" }];
+    const sub = change.subscription;
+    if (!sub) return [];
+    if (change.action === "activated") {
+      const onTrial = sub.trial_ends_at !== null && sub.trial_ends_at > args.now;
+      return [{ ...base, kind: onTrial ? "trial" : "subscription" }];
+    }
+    if (
+      change.action === "updated" &&
+      trialEnded &&
+      sub.status === "active" &&
+      sub.canceled_at === null
+    ) {
+      return [{ ...base, kind: "subscription" }];
+    }
+    if (change.action === "updated" && justCanceled(change)) {
+      return [{ ...base, kind: "cancellation", amount: null }];
+    }
+    return [];
+  });
+}
+
+/**
+ * Decides which pushes an Autumn event produces for one user, applying their
+ * settings. Pure: everything it needs is passed in.
+ */
 export function classifyEvent(args: {
-  event: BillingEvent;
-  plans: Map<string, PlanInfo>;
+  event: WebhookEvent;
+  org: Org;
+  plans: ReadonlyMap<string, Plan>;
+  currency: string;
   settings: NotificationSettings;
   now: number;
-  orgName: string;
-  orgId: string;
-  customerName?: string | null;
-}): Classified[] {
+  customerName: string | null;
+  subscriptionStartedAt?: ReadonlyMap<string, number>;
+}): PushData[] {
   if (!args.settings.pushEnabled) return [];
-  const result: Classified[] = [];
-  if (args.event.type === "invoice.finalized") {
-    const invoice = args.event.data.invoice;
-    const planId = invoice?.plan_ids?.[0];
-    const plan = planId ? args.plans.get(planId) : undefined;
-    const startedAt = invoice?.started_at ?? invoice?.created_at ?? 0;
-    if (
-      plan &&
-      !invoice?.one_off &&
-      invoice?.created_at != null &&
-      Math.abs(invoice.created_at - startedAt) > 3600000 &&
-      args.settings.renewals &&
-      !(args.settings.excludeFree && plan.isFree)
-    ) {
-      const amount =
-        plan.amount == null ? null : { amount: plan.amount, currency: plan.currency.toLowerCase() };
-      result.push({
-        kind: "renewal",
-        orgId: args.orgId,
-        orgName: args.orgName,
-        path: `/org/${args.orgId}/order/${invoice.id}`,
-        title: `Renewal · ${plan.name}`,
-        body: `${args.customerName ?? args.event.data.customer_id} · ${args.orgName}`,
-        amount,
-      });
-    }
-    return result;
-  }
-  for (const change of args.event.data.plan_changes ?? []) {
-    const plan = args.plans.get(change.purchase?.plan_id ?? change.subscription?.plan_id ?? "");
-    if (!plan) continue;
-    let kind: NotificationKind | null = null;
-    if (change.purchase && change.action === "activated") kind = "purchase";
-    else if (change.subscription && change.action === "activated")
-      kind =
-        change.subscription.trial_ends_at != null && change.subscription.trial_ends_at > args.now
-          ? "trial"
-          : "subscription";
-    else if (
-      change.subscription &&
-      change.action === "updated" &&
-      args.event.data.tags?.includes("trial_ended") &&
-      change.subscription.status === "active"
+  return candidatesFor({ ...args, subscriptionStartedAt: args.subscriptionStartedAt ?? new Map() })
+    .filter((candidate) => args.settings[SETTING_FOR[candidate.kind]])
+    .filter(
+      (candidate) =>
+        !(args.settings.excludeFree && candidate.plan.isFree && candidate.kind !== "purchase"),
     )
-      kind = "subscription";
-    else if (
-      change.subscription &&
-      change.action === "updated" &&
-      (change.subscription.canceled_at != null ||
-        (args.event.data.previous_attributes?.canceled_at == null &&
-          change.subscription.canceled_at != null))
-    )
-      kind = "cancellation";
-    if (
-      !kind ||
-      !args.settings[
-        kind === "purchase"
-          ? "purchases"
-          : kind === "trial"
-            ? "trials"
-            : kind === "subscription"
-              ? "subscriptions"
-              : "cancellations"
-      ] ||
-      (args.settings.excludeFree && plan.isFree && kind !== "purchase")
-    )
-      continue;
-    const amount =
-      plan.amount == null ? null : { amount: plan.amount, currency: plan.currency.toLowerCase() };
-    const label = amount ? formatMoney(amount) : plan.name;
-    const title =
-      kind === "purchase"
-        ? `New purchase · ${label} ${plan.name}`
-        : kind === "trial"
-          ? `New trial · ${plan.name}`
-          : kind === "cancellation"
-            ? `Subscription canceled · ${plan.name}`
-            : `New subscription · ${label} ${plan.name}`;
-    const path = `/org/${args.orgId}/customer/${args.event.data.customer_id}`;
-    result.push({
-      kind,
-      orgId: args.orgId,
-      orgName: args.orgName,
-      path,
-      title,
-      body: `${args.customerName ?? args.event.data.customer_id} · ${args.orgName}`,
-      amount,
-    });
-  }
-  return result;
+    .map((candidate) => ({
+      kind: candidate.kind,
+      orgId: args.org.id,
+      orgName: args.org.name,
+      path: candidate.path,
+      title: titleFor(candidate),
+      body: `${args.customerName ?? candidate.customerId} · ${args.org.name}`,
+      amount: candidate.amount,
+    }));
+}
+
+/** Plan IDs whose subscription start time the renewal check needs. */
+export function renewalPlanIds(event: WebhookEvent, plans: ReadonlyMap<string, Plan>): string[] {
+  if (event.type !== "invoice.finalized" || event.data.total <= 0) return [];
+  return event.data.plan_ids.filter((id) => {
+    const plan = plans.get(id);
+    return plan !== undefined && plan.price?.interval !== "one_off";
+  });
 }
