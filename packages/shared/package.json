@@ -13,5 +13,8 @@
     "typecheck": "tsc --noEmit",
     "lint": "oxlint src",
     "build": "tsc --noEmit"
+  },
+  "dependencies": {
+    "zod": "^4.6.5"
   }
 }
