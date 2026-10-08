@@ -6,9 +6,11 @@
   "scripts": {
     "dev": "wrangler dev",
     "typecheck": "tsc --noEmit",
-    "lint": "oxlint src",
-    "build": "wrangler deploy --dry-run",
-    "test": "vitest run --maxWorkers=4"
+    "lint": "oxlint src test scripts",
+    "build": "wrangler deploy --dry-run --outdir dist",
+    "test": "vitest run",
+    "smoke": "bash scripts/smoke.sh",
+    "mock": "bun scripts/mock-autumn.ts"
   },
   "dependencies": {
     "@autumn/shared": "workspace:*",
