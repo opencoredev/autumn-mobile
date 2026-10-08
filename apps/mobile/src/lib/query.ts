@@ -24,7 +24,7 @@ export const persister = createAsyncStoragePersister({
 });
 
 /** Bump to drop every persisted cache entry after a contract change. */
-export const CACHE_BUSTER = "1";
+export const CACHE_BUSTER = "2";
 
 export const queryKeys = {
   me: ["me"] as const,

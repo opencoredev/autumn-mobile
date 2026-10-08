@@ -2,7 +2,7 @@ import { z } from "zod";
 import { PlanSchema, RevenueSummarySchema, type Plan } from "@autumn/shared";
 import { createAutumnClient, type AutumnClient } from "./autumn/client";
 import { planView } from "./autumn/mappers";
-import { InvoiceRaw } from "./autumn/schemas";
+import { InvoiceRaw, SubscriptionRaw } from "./autumn/schemas";
 import type { OrgRow } from "./db";
 import { DEFAULT_AUTUMN_BASE, type Deps } from "./env";
 import { openSecret } from "./secrets";
@@ -13,7 +13,7 @@ const TTL = { plans: 600, names: 300, revenue: 300, currency: 86_400 } as const;
 const cacheKey = {
   plans: (orgId: string) => `plans:v1:${orgId}`,
   names: (orgId: string) => `names:v1:${orgId}`,
-  revenue: (orgId: string) => `dashboard:v2:${orgId}`,
+  revenue: (orgId: string) => `dashboard:v3:${orgId}`,
   currency: (orgId: string) => `currency:v1:${orgId}`,
 };
 
@@ -92,12 +92,19 @@ export async function cachedNames(
 const DashboardCache = z.object({
   revenue: RevenueSummarySchema,
   recentInvoices: z.array(InvoiceRaw),
+  subscriptionCounts: z.object({
+    active: z.number(),
+    trialing: z.number(),
+    truncated: z.boolean(),
+  }),
+  recentSubscriptions: z.array(SubscriptionRaw),
 });
 export type DashboardCache = z.infer<typeof DashboardCache>;
 
 /**
- * Revenue plus the newest invoices, computed together from one full pass over
- * the invoice list and cached briefly. Webhook events clear it.
+ * Revenue, newest invoices, subscription counts and newest subscriptions,
+ * computed from full passes over the invoice and subscription lists and cached
+ * briefly. Webhook events clear it.
  */
 export async function cachedDashboard(
   scope: Scope,

@@ -13,6 +13,7 @@ import type {
 import { firstNonEmptyPage, type AutumnClient } from "../autumn/client";
 import {
   customerSummary,
+  deriveStatus,
   embeddedPurchases,
   embeddedSubscriptions,
   invoiceView,
@@ -30,10 +31,15 @@ import { requireOrg } from "./orgs";
 export const dashboardRoutes = new Hono<AppEnv>();
 
 const REVENUE_WINDOW_DAYS = 30;
-const REVENUE_MAX_PAGES = 20;
-// Counts stop after 10 pages of 200 (2,000 subscriptions); see the README.
-const SUBSCRIPTION_COUNT_MAX_PAGES = 10;
 const RECENT_LIMIT = 10;
+/**
+ * Safety limits only, far above any real org: 100 pages of 1,000 invoices and
+ * 500 pages of 200 subscriptions. Each page is one Cloudflare subrequest, so
+ * very large orgs need the Workers Paid plan (10,000 subrequests per request;
+ * Free allows 50). Hitting a limit is reported to the app, never silent.
+ */
+const INVOICE_MAX_PAGES = 100;
+const SUBSCRIPTION_MAX_PAGES = 500;
 
 const newestFirst = <T extends { createdAt: number }>(items: T[]) =>
   [...items].sort((a, b) => b.createdAt - a.createdAt);
@@ -45,16 +51,33 @@ async function orgScope(c: Context<AppEnv>) {
   return { org, scope, client };
 }
 
-async function allSubscriptions(client: AutumnClient): Promise<SubscriptionRaw[]> {
-  const rows: SubscriptionRaw[] = [];
+/**
+ * Counts live subscriptions in one pass. Autumn's "active" status already
+ * includes trials, pending cancellations and past-due plans, so scheduled and
+ * expired rows are never fetched. Only the counts and newest rows are kept.
+ */
+async function countSubscriptions(client: AutumnClient, now: number) {
+  let active = 0;
+  let trialing = 0;
+  let newest: SubscriptionRaw[] = [];
   let cursor: string | null = null;
-  for (let page = 0; page < SUBSCRIPTION_COUNT_MAX_PAGES; page += 1) {
-    const result = await client.listSubscriptions({ cursor, limit: 200 });
-    rows.push(...result.items);
-    if (!result.hasMore || !result.nextCursor) break;
+  for (let page = 0; page < SUBSCRIPTION_MAX_PAGES; page += 1) {
+    const result = await client.listSubscriptions({ cursor, limit: 200, statuses: ["active"] });
+    for (const raw of result.items) {
+      if (raw.add_on) continue;
+      const status = deriveStatus(raw, now);
+      if (status === "trialing") trialing += 1;
+      else if (status === "active" || status === "canceling" || status === "past_due") active += 1;
+    }
+    newest = [...newest, ...result.items]
+      .sort((a, b) => (b.created_at ?? b.started_at) - (a.created_at ?? a.started_at))
+      .slice(0, RECENT_LIMIT);
+    if (!result.hasMore || !result.nextCursor) {
+      return { counts: { active, trialing, truncated: false }, newest };
+    }
     cursor = result.nextCursor;
   }
-  return rows;
+  return { counts: { active, trialing, truncated: true }, newest };
 }
 
 dashboardRoutes.get("/:orgId/overview", async (c) => {
@@ -68,33 +91,35 @@ dashboardRoutes.get("/:orgId/overview", async (c) => {
   // One full pass over every invoice (Autumn's list order is undocumented)
   // feeds both the revenue chart and the recent orders.
   const dashboard = await cachedDashboard(scope, org, async () => {
-    const { invoices, truncated } = await collectInvoices({
-      fetchPage: (cursor) => client.listInvoices({ cursor, limit: 1000 }),
-      maxPages: REVENUE_MAX_PAGES,
-    });
+    const [{ invoices, truncated }, subscriptions] = await Promise.all([
+      collectInvoices({
+        fetchPage: (cursor) => client.listInvoices({ cursor, limit: 1000 }),
+        maxPages: INVOICE_MAX_PAGES,
+      }),
+      countSubscriptions(client, now),
+    ]);
     return {
       revenue: summarizeRevenue({ invoices, now, windowDays: REVENUE_WINDOW_DAYS, truncated }),
       recentInvoices: newestOrders(invoices, RECENT_LIMIT),
+      subscriptionCounts: subscriptions.counts,
+      recentSubscriptions: subscriptions.newest,
     };
   });
   const revenue = dashboard.revenue;
   const currency = revenue.series[0]?.currency ?? (await orgCurrency(scope, org));
 
-  const subscriptionRows = await allSubscriptions(client);
-  const subscriptions = subscriptionRows.flatMap((raw) =>
+  const recentSubscriptions = dashboard.recentSubscriptions.flatMap((raw) =>
     raw.customer_id
       ? [subscriptionView({ raw, customerId: raw.customer_id, plans, names, currency, now })]
       : [],
   );
-  const base = subscriptions.filter((sub) => !sub.addOn);
 
   const body: OverviewResponse = {
     revenue,
-    activeSubscriptions: base.filter((sub) =>
-      ["active", "canceling", "past_due"].includes(sub.status),
-    ).length,
-    trialingSubscriptions: base.filter((sub) => sub.status === "trialing").length,
-    recentSubscriptions: newestFirst(subscriptions).slice(0, RECENT_LIMIT),
+    activeSubscriptions: dashboard.subscriptionCounts.active,
+    trialingSubscriptions: dashboard.subscriptionCounts.trialing,
+    subscriptionCountsTruncated: dashboard.subscriptionCounts.truncated,
+    recentSubscriptions,
     recentOrders: dashboard.recentInvoices.map((raw) => invoiceView({ raw, plans, names })),
   };
   return c.json(body);

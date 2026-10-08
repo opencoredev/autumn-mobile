@@ -88,10 +88,13 @@ function Stat({
   label,
   value,
   tint,
+  atLeast,
 }: {
   readonly label: string;
   readonly value: number;
   readonly tint: string;
+  /** The Worker stopped at its safety limit, so the real number is higher. */
+  readonly atLeast: boolean;
 }) {
   return (
     <View style={{ flex: 1, gap: 4, paddingHorizontal: space.lg, paddingVertical: space.md }}>
@@ -101,6 +104,7 @@ function Stat({
       </View>
       <Text variant="mono" style={{ fontSize: 22, lineHeight: 28 }}>
         {value.toLocaleString("en-US")}
+        {atLeast ? "+" : ""}
       </Text>
     </View>
   );
@@ -177,9 +181,19 @@ function Overview({ data, orgId }: { readonly data: OverviewResponse; readonly o
           borderColor: palette.hairline,
         }}
       >
-        <Stat label="Active" value={data.activeSubscriptions} tint={palette.positive} />
+        <Stat
+          label="Active"
+          value={data.activeSubscriptions}
+          tint={palette.positive}
+          atLeast={data.subscriptionCountsTruncated}
+        />
         <View style={{ width: 1, backgroundColor: palette.hairline }} />
-        <Stat label="Trialing" value={data.trialingSubscriptions} tint={palette.trial} />
+        <Stat
+          label="Trialing"
+          value={data.trialingSubscriptions}
+          tint={palette.trial}
+          atLeast={data.subscriptionCountsTruncated}
+        />
       </View>
 
       <Section

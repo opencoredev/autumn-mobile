@@ -260,6 +260,8 @@ export const OverviewResponseSchema = z.object({
   revenue: RevenueSummarySchema,
   activeSubscriptions: z.number(),
   trialingSubscriptions: z.number(),
+  /** True only if the Worker hit its page safety limit; the counts are then a floor. */
+  subscriptionCountsTruncated: z.boolean(),
   recentSubscriptions: z.array(SubscriptionSchema),
   recentOrders: z.array(InvoiceSchema),
 });
