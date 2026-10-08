@@ -55,11 +55,11 @@ export function summarizeRevenue(args: {
 }
 
 /**
- * Pages through paid invoices. Autumn doesn't document the sort order, so it
+ * Pages through invoices. Autumn doesn't document the sort order, so it
  * reads every page up to `maxPages` rather than stopping at the window edge,
  * and reports `truncated` if it hit the cap.
  */
-export async function collectPaidInvoices(args: {
+export async function collectInvoices(args: {
   fetchPage: (cursor: string | null) => Promise<ListPage<InvoiceRaw>>;
   maxPages: number;
 }): Promise<{ invoices: InvoiceRaw[]; truncated: boolean }> {
@@ -72,4 +72,12 @@ export async function collectPaidInvoices(args: {
     cursor = result.nextCursor;
   }
   return { invoices, truncated: true };
+}
+
+/** The newest invoices worth showing as orders (drafts and voids are not orders). */
+export function newestOrders(invoices: readonly InvoiceRaw[], limit: number): InvoiceRaw[] {
+  return invoices
+    .filter((invoice) => invoice.status !== "draft" && invoice.status !== "void")
+    .sort((a, b) => b.created_at - a.created_at)
+    .slice(0, limit);
 }

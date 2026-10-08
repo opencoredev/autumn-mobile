@@ -56,18 +56,22 @@ const TicketResponse = z.object({
 
 /**
  * Sends in batches of 100 (Expo's limit). Returns tokens Expo says are no
- * longer registered so the caller can delete them.
+ * longer registered so the caller can delete them, and how many batches
+ * Expo never accepted (network error, non-2xx, or an unreadable reply).
  */
 export async function sendExpoPush(args: {
   messages: readonly ExpoMessage[];
   url: string;
   accessToken: string | undefined;
   fetch: typeof fetch;
-}): Promise<{ sent: number; unregistered: string[] }> {
+}): Promise<{ sent: number; unregistered: string[]; failedBatches: number; batches: number }> {
   const unregistered: string[] = [];
   let sent = 0;
+  let failedBatches = 0;
+  let batches = 0;
   for (let start = 0; start < args.messages.length; start += EXPO_BATCH_LIMIT) {
     const batch = args.messages.slice(start, start + EXPO_BATCH_LIMIT);
+    batches += 1;
     const response = await args
       .fetch(args.url, {
         method: "POST",
@@ -79,9 +83,15 @@ export async function sendExpoPush(args: {
         body: JSON.stringify(batch),
       })
       .catch(() => null);
-    if (!response?.ok) continue;
+    if (!response?.ok) {
+      failedBatches += 1;
+      continue;
+    }
     const tickets = TicketResponse.safeParse(await response.json().catch(() => null));
-    if (!tickets.success) continue;
+    if (!tickets.success) {
+      failedBatches += 1;
+      continue;
+    }
     tickets.data.data.forEach((ticket, index) => {
       if (ticket.status === "ok") sent += 1;
       else if (ticket.details?.error === "DeviceNotRegistered") {
@@ -90,5 +100,5 @@ export async function sendExpoPush(args: {
       }
     });
   }
-  return { sent, unregistered };
+  return { sent, unregistered, failedBatches, batches };
 }

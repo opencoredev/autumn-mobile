@@ -14,10 +14,15 @@ function unb64(value: string): Uint8Array {
   return Uint8Array.from(s, (c) => c.charCodeAt(0));
 }
 export async function importEncryptionKey(value: string): Promise<CryptoKey> {
-  return crypto.subtle.importKey("raw", bytesBuffer(unb64(value)), "AES-GCM", false, [
-    "encrypt",
-    "decrypt",
-  ]);
+  let raw: Uint8Array;
+  try {
+    raw = unb64(value.trim());
+  } catch {
+    throw new Error("KEY_ENCRYPTION_KEY must be base64.");
+  }
+  // Require AES-256; a shorter key would silently downgrade to AES-128/192.
+  if (raw.byteLength !== 32) throw new Error("KEY_ENCRYPTION_KEY must decode to exactly 32 bytes.");
+  return crypto.subtle.importKey("raw", bytesBuffer(raw), "AES-GCM", false, ["encrypt", "decrypt"]);
 }
 export async function encryptSecret(args: {
   value: string;

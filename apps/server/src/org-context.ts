@@ -1,7 +1,8 @@
 import { z } from "zod";
-import { PlanSchema, RevenueSummarySchema, type Plan, type RevenueSummary } from "@autumn/shared";
+import { PlanSchema, RevenueSummarySchema, type Plan } from "@autumn/shared";
 import { createAutumnClient, type AutumnClient } from "./autumn/client";
 import { planView } from "./autumn/mappers";
+import { InvoiceRaw } from "./autumn/schemas";
 import type { OrgRow } from "./db";
 import { DEFAULT_AUTUMN_BASE, type Deps } from "./env";
 import { openSecret } from "./secrets";
@@ -12,7 +13,7 @@ const TTL = { plans: 600, names: 300, revenue: 300, currency: 86_400 } as const;
 const cacheKey = {
   plans: (orgId: string) => `plans:v1:${orgId}`,
   names: (orgId: string) => `names:v1:${orgId}`,
-  revenue: (orgId: string) => `revenue:v1:${orgId}`,
+  revenue: (orgId: string) => `dashboard:v2:${orgId}`,
   currency: (orgId: string) => `currency:v1:${orgId}`,
 };
 
@@ -88,24 +89,38 @@ export async function cachedNames(
   return new Map(Object.entries(names));
 }
 
-export async function cachedRevenue(
+const DashboardCache = z.object({
+  revenue: RevenueSummarySchema,
+  recentInvoices: z.array(InvoiceRaw),
+});
+export type DashboardCache = z.infer<typeof DashboardCache>;
+
+/**
+ * Revenue plus the newest invoices, computed together from one full pass over
+ * the invoice list and cached briefly. Webhook events clear it.
+ */
+export async function cachedDashboard(
   scope: Scope,
   org: OrgRow,
-  compute: () => Promise<RevenueSummary>,
-): Promise<RevenueSummary> {
-  const cached = await readCache(scope.env.CACHE, cacheKey.revenue(org.id), RevenueSummarySchema);
+  compute: () => Promise<DashboardCache>,
+): Promise<DashboardCache> {
+  const cached = await readCache(scope.env.CACHE, cacheKey.revenue(org.id), DashboardCache);
   if (cached) return cached;
   const fresh = await compute();
   await scope.env.CACHE.put(cacheKey.revenue(org.id), JSON.stringify(fresh), {
     expirationTtl: TTL.revenue,
   });
-  const main = fresh.series[0];
+  const main = fresh.revenue.series[0];
   if (main) {
     await scope.env.CACHE.put(cacheKey.currency(org.id), main.currency, {
       expirationTtl: TTL.currency,
     });
   }
   return fresh;
+}
+
+export async function invalidateDashboard(env: Env, orgId: string): Promise<void> {
+  await env.CACHE.delete(cacheKey.revenue(orgId));
 }
 
 /**

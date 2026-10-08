@@ -11,7 +11,13 @@ import {
 import { DEFAULT_EXPO_PUSH_URL, type AppEnv } from "../env";
 import { HttpError, param } from "../http";
 import { classifyEvent, renewalPlanIds, WebhookEvent } from "../notifications";
-import { autumnFor, cachedNames, cachedPlans, orgCurrency } from "../org-context";
+import {
+  autumnFor,
+  cachedNames,
+  cachedPlans,
+  invalidateDashboard,
+  orgCurrency,
+} from "../org-context";
 import { buildMessages, sendExpoPush } from "../push";
 import { openSecret } from "../secrets";
 
@@ -86,14 +92,18 @@ async function deliver(c: Context<AppEnv>, org: OrgRow, event: WebhookEvent): Pr
   if (notifications.length === 0) return;
 
   const tokens = await deviceTokensForUser(c.env.DB, org.user_id);
-  const messages = buildMessages({ tokens, notifications });
-  const send = sendExpoPush({
-    messages,
+  const result = await sendExpoPush({
+    messages: buildMessages({ tokens, notifications }),
     url: c.env.EXPO_PUSH_URL || DEFAULT_EXPO_PUSH_URL,
     accessToken: c.env.EXPO_ACCESS_TOKEN,
     fetch: c.var.deps.fetch,
-  }).then((result) => deleteDevices(c.env.DB, result.unregistered));
-  c.executionCtx.waitUntil(send);
+  });
+  await deleteDevices(c.env.DB, result.unregistered);
+  // If Expo took none of it, fail so Svix retries. A partial failure is not
+  // retried, since that would repeat the pushes that did go out.
+  if (result.batches > 0 && result.failedBatches === result.batches) {
+    throw new HttpError("autumn_unavailable", "Expo push service didn't accept the notification.");
+  }
 }
 
 /**
@@ -142,6 +152,8 @@ webhookRoutes.post("/autumn/:webhookId", async (c) => {
   await c.env.DB.prepare("UPDATE orgs SET last_webhook_at = ? WHERE id = ?")
     .bind(now, org.id)
     .run();
+  // Billing changed, so the next dashboard load should read it fresh.
+  await invalidateDashboard(c.env, org.id);
 
   let json: unknown;
   try {

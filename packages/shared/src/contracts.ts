@@ -288,7 +288,6 @@ export const CustomerPageSchema = pageSchema(CustomerSummarySchema);
 export const CustomerDetailSchema = z.object({
   customer: CustomerSummarySchema.extend({
     stripeId: z.string().nullable(),
-    metadata: z.record(z.string(), z.unknown()),
   }),
   subscriptions: z.array(SubscriptionSchema),
   purchases: z.array(PurchaseSchema),

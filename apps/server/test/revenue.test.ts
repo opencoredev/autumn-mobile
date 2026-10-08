@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { InvoiceRaw } from "../src/autumn/schemas";
-import { collectPaidInvoices, summarizeRevenue } from "../src/revenue";
+import { collectInvoices, newestOrders, summarizeRevenue } from "../src/revenue";
 
 const NOW = Date.UTC(2026, 9, 8, 15, 0, 0);
 const DAY = 86_400_000;
@@ -113,7 +113,7 @@ describe("summarizeRevenue", () => {
   });
 });
 
-describe("collectPaidInvoices", () => {
+describe("collectInvoices", () => {
   const pages: Record<string, { items: InvoiceRaw[]; nextCursor: string | null }> = {
     first: { items: [invoice({ id: "1" })], nextCursor: "c2" },
     c2: { items: [], nextCursor: "c3" },
@@ -125,14 +125,27 @@ describe("collectPaidInvoices", () => {
   });
 
   it("follows next_cursor across pages, including empty ones", async () => {
-    const result = await collectPaidInvoices({ fetchPage, maxPages: 10 });
-    expect(result.invoices.map((row) => row.id)).toEqual(["1", "2", "3"]);
+    const result = await collectInvoices({ fetchPage, maxPages: 10 });
+    expect(result.invoices.map((row: InvoiceRaw) => row.id)).toEqual(["1", "2", "3"]);
     expect(result.truncated).toBe(false);
   });
 
   it("stops at the safety cap and reports truncation", async () => {
-    const result = await collectPaidInvoices({ fetchPage, maxPages: 2 });
-    expect(result.invoices.map((row) => row.id)).toEqual(["1"]);
+    const result = await collectInvoices({ fetchPage, maxPages: 2 });
+    expect(result.invoices.map((row: InvoiceRaw) => row.id)).toEqual(["1"]);
     expect(result.truncated).toBe(true);
+  });
+});
+
+describe("newestOrders", () => {
+  it("sorts newest first, skips drafts and voids, and limits", () => {
+    const rows = [
+      invoice({ id: "old", created_at: NOW - 3 * DAY }),
+      invoice({ id: "void", status: "void", created_at: NOW }),
+      invoice({ id: "draft", status: "draft", created_at: NOW }),
+      invoice({ id: "open", status: "open", created_at: NOW - DAY }),
+      invoice({ id: "new", created_at: NOW - 1000 }),
+    ];
+    expect(newestOrders(rows, 2).map((row) => row.id)).toEqual(["new", "open"]);
   });
 });

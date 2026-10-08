@@ -59,6 +59,12 @@ describe("AES-GCM secret storage", () => {
     }
   });
 
+  it("requires a 256-bit master key", async () => {
+    const short = btoa(String.fromCharCode(...crypto.getRandomValues(new Uint8Array(16))));
+    await expect(importEncryptionKey(short)).rejects.toThrow(/32 bytes/);
+    await expect(importEncryptionKey("not base64!")).rejects.toThrow();
+  });
+
   it("refuses to decrypt with a different master key", async () => {
     const sealed = await sealSecret({
       masterKey: masterKey(),

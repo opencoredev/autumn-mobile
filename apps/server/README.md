@@ -44,17 +44,17 @@ Another user's org always answers 404, never 403, so org ids can't be probed.
 
 `src/autumn/client.ts` is the only Autumn client. It may call six endpoints, all reads: `invoices.list`, `subscriptions.list`, `purchases.list`, `customers.list`, `customers.get` and `plans.list` (Autumn uses `POST` for them). Any other path is refused before a request is made, and a test checks that. Requests send `x-api-version: 2.5.0`. Responses are parsed with zod; a malformed row is dropped rather than failing the whole list. Autumn's 401/403 becomes `invalid_autumn_key`, 404 becomes `not_found`, anything else becomes `autumn_unavailable`.
 
-Customer `email` fields are never parsed, stored or returned.
+Customer `email` and free-form `metadata` fields are never parsed, stored or returned; metadata can hold anything, including personal data.
 
 ## Secrets
 
 Autumn secret keys and webhook signing secrets are encrypted with AES-256-GCM before they reach D1 (`src/secrets.ts`):
 
-- The master key is `KEY_ENCRYPTION_KEY`, a Worker secret. It is never in D1, KV, the repo or logs.
+- The master key is `KEY_ENCRYPTION_KEY`, a Worker secret. It must decode to exactly 32 bytes (AES-256); anything else fails loudly instead of silently using a weaker key. It is never in D1, KV, the repo or logs.
 - Every encryption uses a fresh random 12-byte IV.
 - The associated data is `userId:orgId:purpose`, so a ciphertext copied to another row, user or purpose fails to decrypt.
 - `key_version` on each org row records which master key sealed it, for rotation.
-- Keys are decrypted only inside a request that needs to call Autumn. Responses expose only the last four characters and whether the key is live or sandbox.
+- Keys are decrypted only inside a request that needs to call Autumn. Responses expose only the last four characters (the masked suffix the app shows, also stored in plaintext for that purpose) and whether the key is live or sandbox.
 
 **Why not Cloudflare Secrets Store?** Workers read Secrets Store values through bindings, and secrets are created out of band (dashboard, Wrangler, or the API with an account token). A Worker can't create a secret at runtime when a user pastes a key, and per-user secrets don't fit an account-level store. Encrypting in D1 under one master key held as a Worker secret gives the same property, no plaintext keys at rest, for any number of users.
 
@@ -62,7 +62,9 @@ Sessions are 32 random bytes. D1 stores only their SHA-256 hash; they expire aft
 
 ## Revenue
 
-Autumn has no revenue endpoint, so the overview sums invoices (`src/revenue.ts`). It pages through `invoices.list` with `status: ["paid"]` (1,000 per page, up to 20 pages) because Autumn doesn't document the list order. For each paid invoice created in the last 30 UTC days it adds `amount_paid − refunded_amount`, falling back to `total` when `amount_paid` is null, which is the realized-revenue formula from Autumn's own docs. Amounts are in major units. Results are grouped per currency (largest first), every day is zero-filled, and `truncated: true` means the page cap was hit. The summary is cached in KV for 5 minutes, plans for 10, customer names for 5.
+Autumn has no revenue endpoint, so the overview sums invoices (`src/revenue.ts`). It pages through every invoice (1,000 per page, up to 20 pages) because Autumn doesn't document the list order; the same pass gives the ten newest orders. For each paid invoice created in the last 30 UTC days it adds `amount_paid − refunded_amount`, falling back to `total` when `amount_paid` is null, which is the realized-revenue formula from Autumn's own docs. Amounts are in major units. Results are grouped per currency (largest first), every day is zero-filled, and `truncated: true` means the page cap was hit. Revenue and recent orders are cached in KV for 5 minutes and cleared whenever a verified webhook arrives for the org, so a new sale shows up on the next refresh. Plans are cached for 10 minutes, customer names for 5.
+
+Active and trialing counts read up to 2,000 subscriptions (10 pages of 200); larger orgs will see counts capped there.
 
 Plans don't carry a currency in Autumn's API, so plan prices are shown in the org's main revenue currency, defaulting to USD.
 
@@ -75,7 +77,7 @@ Each org gets an unguessable webhook URL. A request is processed only if:
 3. one of the `v1,` signatures matches HMAC-SHA256 over `id.timestamp.body` with the base64-decoded secret (constant-time compare), and
 4. the timestamp is within 5 minutes.
 
-The `svix-id` is recorded per org, so a retried delivery never pushes twice. If building the push fails, the claim is released and the Worker returns an error so Svix retries.
+The `svix-id` is recorded per org, so a retried delivery never pushes twice. If building the push fails, or Expo accepts none of it (outage, non-2xx, unreadable reply), the claim is released and the Worker returns an error so Svix retries. A partial Expo failure is not retried, because that would repeat the pushes that did go out.
 
 `src/notifications.ts` decides what to send, as a pure function of the event, the org's plans and the user's settings:
 

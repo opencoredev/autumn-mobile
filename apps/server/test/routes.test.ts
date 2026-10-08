@@ -342,7 +342,9 @@ describe("dashboard data", () => {
     expect(detail.customer.name).toBe("Hooli");
     expect(detail.invoices.length).toBeGreaterThan(0);
     expect(detail.subscriptions[0]?.status).toBe("canceling");
-    expect(JSON.stringify(detail)).not.toMatch(/email/i);
+    const detailText = JSON.stringify(detail);
+    expect(detailText).not.toMatch(/email|metadata|organic/i);
+    expect(detailText).not.toContain("@");
 
     const invoice = parse(
       InvoiceResponseSchema,
@@ -353,19 +355,51 @@ describe("dashboard data", () => {
     expect((await h.request(`${base}/customers/cus_missing`, { token })).status).toBe(404);
   });
 
-  it("caches revenue briefly instead of re-reading every invoice", async () => {
+  it("caches revenue and recent orders briefly, and a webhook clears them", async () => {
     const token = await h.devLogin();
     const org = await createOrg(token);
+    const invoiceCalls = () =>
+      h.fake.autumnCalls.filter((call) => call === "/v1/invoices.list").length;
+    const first = parse(
+      OverviewResponseSchema,
+      await h.request(`/v1/orgs/${org.id}/overview`, { token }),
+    );
+    const afterFirst = invoiceCalls();
+    expect(afterFirst).toBeGreaterThan(0);
     await h.request(`/v1/orgs/${org.id}/overview`, { token });
-    const callsAfterFirst = h.fake.autumnCalls.filter(
-      (call) => call === "/v1/invoices.list",
-    ).length;
+    expect(invoiceCalls()).toBe(afterFirst);
+
+    // The fake returns invoices oldest first; recent orders must still be the newest.
+    const newest = [...h.fake.data.invoices]
+      .filter((invoice) => invoice.status !== "void" && invoice.status !== "draft")
+      .sort((a, b) => b.created_at - a.created_at)
+      .slice(0, 10)
+      .map((invoice) => invoice.id);
+    expect(first.recentOrders.map((invoice) => invoice.id)).toEqual(newest);
+
+    const secret = randomWebhookSecret();
+    await h.request(`/v1/orgs/${org.id}/webhook-secret`, {
+      method: "PUT",
+      token,
+      body: { signingSecret: secret },
+    });
+    const body = JSON.stringify({
+      type: "balances.limit_reached",
+      data: { customer_id: "cus_demo_1" },
+    });
+    const timestamp = Math.floor(NOW / 1000);
+    const signature = await signSvix({ secret, id: "msg_cache", timestamp, body });
+    await h.request(new URL(org.webhookUrl).pathname, {
+      method: "POST",
+      rawBody: body,
+      headers: {
+        "svix-id": "msg_cache",
+        "svix-timestamp": String(timestamp),
+        "svix-signature": signature,
+      },
+    });
     await h.request(`/v1/orgs/${org.id}/overview`, { token });
-    const callsAfterSecond = h.fake.autumnCalls.filter(
-      (call) => call === "/v1/invoices.list",
-    ).length;
-    // The second overview only re-reads the recent-orders page, not the paid history.
-    expect(callsAfterSecond - callsAfterFirst).toBe(1);
+    expect(invoiceCalls()).toBeGreaterThan(afterFirst);
   });
 });
 
@@ -674,6 +708,28 @@ describe("webhooks", () => {
     });
     expect(response.status).toBe(200);
     expect(h.fake.pushes).toHaveLength(0);
+  });
+
+  it("asks Svix to retry when Expo is down, then delivers once on the retry", async () => {
+    const { secret, webhookPath } = await setup();
+    h.fake.expo.down = true;
+    const failed = await deliver({
+      path: webhookPath,
+      secret,
+      id: "msg_retry",
+      payload: newSubscription,
+    });
+    expect(failed.status).toBe(502);
+    expect(h.fake.pushes).toHaveLength(0);
+    h.fake.expo.down = false;
+    const retried = await deliver({
+      path: webhookPath,
+      secret,
+      id: "msg_retry",
+      payload: newSubscription,
+    });
+    expect(retried.status).toBe(200);
+    expect(h.fake.pushes).toHaveLength(1);
   });
 
   it("removes devices Expo reports as unregistered", async () => {

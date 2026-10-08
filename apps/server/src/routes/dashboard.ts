@@ -23,14 +23,15 @@ import {
 import { InvoiceRaw, parseRows, type SubscriptionRaw } from "../autumn/schemas";
 import type { AppEnv } from "../env";
 import { HttpError, param } from "../http";
-import { autumnFor, cachedNames, cachedPlans, cachedRevenue, orgCurrency } from "../org-context";
-import { collectPaidInvoices, summarizeRevenue } from "../revenue";
+import { autumnFor, cachedDashboard, cachedNames, cachedPlans, orgCurrency } from "../org-context";
+import { collectInvoices, newestOrders, summarizeRevenue } from "../revenue";
 import { requireOrg } from "./orgs";
 
 export const dashboardRoutes = new Hono<AppEnv>();
 
 const REVENUE_WINDOW_DAYS = 30;
 const REVENUE_MAX_PAGES = 20;
+// Counts stop after 10 pages of 200 (2,000 subscriptions); see the README.
 const SUBSCRIPTION_COUNT_MAX_PAGES = 10;
 const RECENT_LIMIT = 10;
 
@@ -64,19 +65,22 @@ dashboardRoutes.get("/:orgId/overview", async (c) => {
     cachedNames(scope, org, client),
   ]);
 
-  const revenue = await cachedRevenue(scope, org, async () => {
-    const { invoices, truncated } = await collectPaidInvoices({
-      fetchPage: (cursor) => client.listInvoices({ cursor, limit: 1000, status: ["paid"] }),
+  // One full pass over every invoice (Autumn's list order is undocumented)
+  // feeds both the revenue chart and the recent orders.
+  const dashboard = await cachedDashboard(scope, org, async () => {
+    const { invoices, truncated } = await collectInvoices({
+      fetchPage: (cursor) => client.listInvoices({ cursor, limit: 1000 }),
       maxPages: REVENUE_MAX_PAGES,
     });
-    return summarizeRevenue({ invoices, now, windowDays: REVENUE_WINDOW_DAYS, truncated });
+    return {
+      revenue: summarizeRevenue({ invoices, now, windowDays: REVENUE_WINDOW_DAYS, truncated }),
+      recentInvoices: newestOrders(invoices, RECENT_LIMIT),
+    };
   });
+  const revenue = dashboard.revenue;
   const currency = revenue.series[0]?.currency ?? (await orgCurrency(scope, org));
 
-  const [subscriptionRows, recentInvoices] = await Promise.all([
-    allSubscriptions(client),
-    client.listInvoices({ limit: 100 }),
-  ]);
+  const subscriptionRows = await allSubscriptions(client);
   const subscriptions = subscriptionRows.flatMap((raw) =>
     raw.customer_id
       ? [subscriptionView({ raw, customerId: raw.customer_id, plans, names, currency, now })]
@@ -91,11 +95,7 @@ dashboardRoutes.get("/:orgId/overview", async (c) => {
     ).length,
     trialingSubscriptions: base.filter((sub) => sub.status === "trialing").length,
     recentSubscriptions: newestFirst(subscriptions).slice(0, RECENT_LIMIT),
-    recentOrders: newestFirst(
-      recentInvoices.items
-        .filter((invoice) => invoice.status !== "draft" && invoice.status !== "void")
-        .map((raw) => invoiceView({ raw, plans, names })),
-    ).slice(0, RECENT_LIMIT),
+    recentOrders: dashboard.recentInvoices.map((raw) => invoiceView({ raw, plans, names })),
   };
   return c.json(body);
 });
@@ -220,7 +220,6 @@ dashboardRoutes.get("/:orgId/customers/:customerId", async (c) => {
     customer: {
       ...customerSummary({ raw: { ...raw, id: customerId }, plans, now }),
       stripeId: raw.stripe_id,
-      metadata: raw.metadata,
     },
     subscriptions: newestFirst(
       subscriptions.map((sub) =>

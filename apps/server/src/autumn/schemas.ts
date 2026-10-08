@@ -120,14 +120,11 @@ export type PurchaseRaw = z.infer<typeof PurchaseRaw>;
 export const CustomerRaw = z.object({
   id: nullishString,
   name: nullishString,
-  // `email` exists in Autumn's response; it is deliberately not parsed or kept.
+  // `email` and free-form `metadata` exist in Autumn's response. Neither is
+  // parsed or kept: metadata can hold anything, including personal data.
   created_at: z.number().default(0),
   env: z.enum(["sandbox", "live"]).default("live"),
   stripe_id: nullishString,
-  metadata: z
-    .record(z.string(), z.unknown())
-    .nullish()
-    .transform((value) => value ?? {}),
   subscriptions: z.array(z.unknown()).default([]),
   purchases: z.array(z.unknown()).default([]),
   invoices: z.array(z.unknown()).optional(),

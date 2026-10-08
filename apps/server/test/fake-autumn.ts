@@ -151,7 +151,12 @@ export function buildFixtures(now: number) {
     created_at: now - (index * 5 + 3) * DAY,
     env: "live",
     stripe_id: `cus_fake_${1000 + index}`,
-    metadata: { source: index % 2 === 0 ? "organic" : "partner" },
+    // Free-form metadata, including a contact address built at runtime. The
+    // Worker must never pass metadata through.
+    metadata: {
+      source: index % 2 === 0 ? "organic" : "partner",
+      contact: ["billing", "example.test"].join("@"),
+    },
   }));
 
   const subscriptionPlan = [
@@ -288,6 +293,7 @@ export function createFakeAutumn(args: { now: number; validKey: string; fixtures
   const pushes: RecordedPush[] = [];
   const autumnCalls: string[] = [];
   const unregisteredTokens = new Set<string>();
+  const expo = { down: false };
 
   const withEmbedded = (customer: Fixtures["customers"][number]) => ({
     ...customer,
@@ -357,6 +363,7 @@ export function createFakeAutumn(args: { now: number; validKey: string; fixtures
   async function handle(request: Request): Promise<Response> {
     const url = new URL(request.url);
     if (url.pathname.endsWith("/push") || url.pathname === "/mock/push") {
+      if (expo.down) return new Response("unavailable", { status: 503 });
       const batch: unknown = await request.json();
       const messages = Array.isArray(batch) ? batch.filter(isRecordedPush) : [];
       pushes.push(...messages);
@@ -386,5 +393,5 @@ export function createFakeAutumn(args: { now: number; validKey: string; fixtures
 
   const fetchImpl: typeof fetch = (input, init) => handle(new Request(input, init));
 
-  return { data, pushes, autumnCalls, unregisteredTokens, handle, fetch: fetchImpl };
+  return { data, pushes, autumnCalls, unregisteredTokens, expo, handle, fetch: fetchImpl };
 }
