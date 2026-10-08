@@ -6,6 +6,7 @@ import Svg, { Defs, Line, LinearGradient, Path, Rect, Stop } from "react-native-
 import { scheduleOnRN } from "react-native-worklets";
 import type { RevenueDay } from "@autumn/shared";
 import { selectionTick } from "../lib/celebrate";
+import { HalftoneGrid } from "./Halftone";
 import { usePalette } from "../theme";
 
 const HEIGHT = 168;
@@ -140,10 +141,13 @@ export function RevenueChart({
           <Animated.View {...(reduceMotion ? {} : { entering: FadeIn.duration(280) })}>
             <Svg width={width} height={HEIGHT}>
               <Defs>
-                <LinearGradient id="revenueFill" x1="0" y1="0" x2="0" y2="1">
-                  <Stop offset="0" stopColor={palette.accent} stopOpacity={0.32} />
-                  <Stop offset="1" stopColor={palette.accent} stopOpacity={0} />
+                {/* Autumn's halftone: magenta to violet, fading out, cut into pixels. */}
+                <LinearGradient id="revenueFill" x1="0" y1="0" x2="0.35" y2="1">
+                  <Stop offset="0" stopColor={palette.magenta} stopOpacity={1} />
+                  <Stop offset="0.5" stopColor="#9A1BE6" stopOpacity={0.9} />
+                  <Stop offset="1" stopColor="#5D04AF" stopOpacity={0.35} />
                 </LinearGradient>
+                <HalftoneGrid id="revenuePixels" color={palette.surface} />
               </Defs>
               <Line
                 x1={0}
@@ -153,12 +157,26 @@ export function RevenueChart({
                 stroke={palette.hairline}
                 strokeWidth={1}
               />
+              {/* Dashed quarter lines, like the dashboard's chart grid (2 2). */}
+              {[0.25, 0.5, 0.75].map((fraction) => (
+                <Line
+                  key={fraction}
+                  x1={0}
+                  x2={width}
+                  y1={TOP_PAD + (HEIGHT - TOP_PAD - BOTTOM_PAD) * fraction}
+                  y2={TOP_PAD + (HEIGHT - TOP_PAD - BOTTOM_PAD) * fraction}
+                  stroke={palette.hairline}
+                  strokeWidth={1}
+                  strokeDasharray="2 2"
+                />
+              ))}
               {area ? <Path d={area} fill="url(#revenueFill)" /> : null}
+              {area ? <Path d={area} fill="url(#revenuePixels)" /> : null}
               {line ? (
                 <Path
                   d={line}
-                  stroke={palette.accentText}
-                  strokeWidth={2}
+                  stroke={palette.scheme === "dark" ? "#E9B8FF" : palette.accentText}
+                  strokeWidth={1.5}
                   fill="none"
                   strokeLinejoin="round"
                   strokeLinecap="round"
@@ -180,7 +198,7 @@ export function RevenueChart({
                     y={active.y - 4}
                     width={8}
                     height={8}
-                    fill={palette.background}
+                    fill={palette.surface}
                     stroke={palette.accentText}
                     strokeWidth={2}
                   />

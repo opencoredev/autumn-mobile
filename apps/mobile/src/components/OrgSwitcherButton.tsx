@@ -18,13 +18,12 @@ export function OrgMonogram({
       style={{
         width: size,
         height: size,
-        borderRadius: 6,
-        backgroundColor: palette.accentSoft,
+        backgroundColor: palette.accent,
         alignItems: "center",
         justifyContent: "center",
       }}
     >
-      <Text variant="label" tone="accent" style={{ fontSize: size * 0.45, letterSpacing: 0 }}>
+      <Text variant="label" tone="onAccent" style={{ fontSize: size * 0.45, letterSpacing: 0 }}>
         {name.trim()[0]?.toUpperCase() ?? "?"}
       </Text>
     </View>
@@ -50,7 +49,6 @@ export function OrgSwitcherButton() {
         paddingVertical: 6,
         paddingHorizontal: space.sm,
         marginLeft: -space.sm,
-        borderRadius: 8,
         backgroundColor: pressed ? palette.elevated : "transparent",
       })}
     >
@@ -59,7 +57,7 @@ export function OrgSwitcherButton() {
         {activeOrg.name}
       </Text>
       {activeOrg.keyEnv === "sandbox" ? (
-        <Text variant="label" style={{ color: palette.warning }}>
+        <Text variant="label" style={{ color: palette.sandbox }}>
           Sandbox
         </Text>
       ) : null}

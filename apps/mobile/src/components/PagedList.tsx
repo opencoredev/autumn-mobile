@@ -56,9 +56,24 @@ export function PagedList<T>({
     <FlashList
       data={items}
       keyExtractor={keyOf}
-      renderItem={({ item, index }) => renderItem(item, index)}
+      renderItem={({ item, index }) => (
+        // Rows sit in one hairline-framed column, as on useautumn.com.
+        <View
+          style={{
+            marginHorizontal: space.md,
+            borderLeftWidth: 1,
+            borderRightWidth: 1,
+            borderTopWidth: index === 0 ? 1 : 0,
+            borderBottomWidth: index === items.length - 1 ? 1 : 0,
+            borderColor: palette.hairline,
+            backgroundColor: palette.surface,
+          }}
+        >
+          {renderItem(item, index)}
+        </View>
+      )}
       style={{ backgroundColor: palette.background }}
-      contentContainerStyle={{ paddingBottom: space.xxl }}
+      contentContainerStyle={{ paddingTop: space.sm, paddingBottom: space.xxl }}
       keyboardDismissMode="on-drag"
       keyboardShouldPersistTaps="handled"
       ListHeaderComponent={header}

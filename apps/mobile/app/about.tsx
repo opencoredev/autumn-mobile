@@ -5,7 +5,7 @@ import { PixelIcon } from "@/src/components/PixelIcon";
 import { Row } from "@/src/components/Row";
 import { Section } from "@/src/components/Section";
 import { Text } from "@/src/components/Text";
-import { radius, space, usePalette } from "@/src/theme";
+import { space, usePalette } from "@/src/theme";
 
 export default function AboutScreen() {
   const palette = usePalette();
@@ -19,7 +19,6 @@ export default function AboutScreen() {
           style={{
             width: 56,
             height: 56,
-            borderRadius: radius.lg,
             backgroundColor: "#000000",
             borderWidth: 1,
             borderColor: palette.hairline,
@@ -36,7 +35,6 @@ export default function AboutScreen() {
               alignSelf: "flex-start",
               paddingHorizontal: space.sm,
               paddingVertical: 4,
-              borderRadius: radius.sm,
               borderWidth: 1,
               borderColor: palette.warning,
             }}

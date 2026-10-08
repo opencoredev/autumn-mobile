@@ -1,5 +1,5 @@
 import { Pressable, View } from "react-native";
-import { radius, space, usePalette } from "../theme";
+import { space, usePalette } from "../theme";
 import { Text } from "./Text";
 
 export function Segmented<T extends string>({
@@ -20,7 +20,6 @@ export function Segmented<T extends string>({
         marginHorizontal: space.lg,
         marginVertical: space.sm,
         padding: 3,
-        borderRadius: radius.md,
         backgroundColor: palette.surface,
         borderWidth: 1,
         borderColor: palette.hairline,
@@ -39,11 +38,10 @@ export function Segmented<T extends string>({
               height: 32,
               alignItems: "center",
               justifyContent: "center",
-              borderRadius: radius.sm + 1,
-              backgroundColor: active ? palette.elevated : "transparent",
+              backgroundColor: active ? palette.accent : "transparent",
             }}
           >
-            <Text variant="label" style={{ color: active ? palette.text : palette.textFaint }}>
+            <Text variant="label" style={{ color: active ? palette.onAccent : palette.textMuted }}>
               {option.label}
             </Text>
           </Pressable>

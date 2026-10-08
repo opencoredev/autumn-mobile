@@ -9,20 +9,13 @@ import { Row } from "@/src/components/Row";
 import { Section } from "@/src/components/Section";
 import { Skeleton } from "@/src/components/Skeleton";
 import { EmptyState, ErrorState } from "@/src/components/States";
+import { InvoiceStatusChip } from "@/src/components/StatusChip";
 import { Text } from "@/src/components/Text";
 import { api } from "@/src/lib/api";
 import { longDate, shortDate } from "@/src/lib/format";
 import { queryKeys } from "@/src/lib/query";
 import { useRouteOrg, useRouteParam } from "@/src/lib/route-org";
 import { space, usePalette } from "@/src/theme";
-
-const STATUS_TEXT = {
-  draft: "Draft",
-  open: "Open",
-  paid: "Paid",
-  void: "Void",
-  uncollectible: "Uncollectible",
-} as const;
 
 export default function OrderScreen() {
   const org = useRouteOrg();
@@ -57,12 +50,6 @@ function OrderDetail({ org, invoiceId }: { readonly org: Org; readonly invoiceId
   }
   if (!query.data) return <ErrorState error={query.error} onRetry={() => void query.refetch()} />;
   const invoice = query.data.invoice;
-  const statusColor =
-    invoice.status === "paid"
-      ? palette.positive
-      : invoice.status === "open"
-        ? palette.warning
-        : palette.textMuted;
 
   return (
     <ScrollView
@@ -70,18 +57,19 @@ function OrderDetail({ org, invoiceId }: { readonly org: Org; readonly invoiceId
       contentContainerStyle={{ paddingBottom: space.xxl }}
     >
       <View style={{ paddingHorizontal: space.lg, paddingTop: space.md, gap: 6 }}>
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-          <View style={{ width: 6, height: 6, backgroundColor: statusColor }} />
-          <Text variant="label" style={{ color: statusColor }}>
-            {STATUS_TEXT[invoice.status]}
-          </Text>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: space.sm }}>
+          <InvoiceStatusChip
+            status={invoice.status}
+            total={invoice.total.amount}
+            refunded={invoice.refunded}
+          />
           <Text variant="label" tone="faint">
-            · {longDate(invoice.createdAt)}
+            {longDate(invoice.createdAt)}
           </Text>
         </View>
         <Text variant="display">{formatMoney(invoice.total)}</Text>
         {invoice.refunded > 0 ? (
-          <Text variant="caption" tone="danger">
+          <Text variant="caption" style={{ color: palette.amber }}>
             {formatMoney({ amount: invoice.refunded, currency: invoice.total.currency })} refunded
           </Text>
         ) : null}

@@ -10,7 +10,7 @@ import { initials, relativeTime } from "@/src/lib/format";
 import { useActiveOrg } from "@/src/lib/orgs";
 import { FIRST_PAGE, queryKeys } from "@/src/lib/query";
 import { useDebounced } from "@/src/lib/use-debounced";
-import { fonts, radius, space, usePalette } from "@/src/theme";
+import { fonts, space, usePalette } from "@/src/theme";
 
 function SearchField({
   value,
@@ -28,7 +28,6 @@ function SearchField({
           alignItems: "center",
           gap: space.sm,
           height: 40,
-          borderRadius: radius.md,
           paddingHorizontal: space.md,
           backgroundColor: palette.surface,
           borderWidth: 1,

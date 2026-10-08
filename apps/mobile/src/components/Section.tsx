@@ -3,6 +3,19 @@ import { Pressable, View } from "react-native";
 import { space, usePalette } from "../theme";
 import { Text } from "./Text";
 
+/** `// SECTION` label in Geist Mono, as on useautumn.com. */
+export function SectionLabel({ title }: { readonly title: string }) {
+  return (
+    <Text variant="label" accessibilityRole="header">
+      <Text variant="label" tone="faint">
+        {"// "}
+      </Text>
+      {title}
+    </Text>
+  );
+}
+
+/** A titled group of rows inside a hairline frame that runs edge to edge. */
 export function Section({
   title,
   action,
@@ -20,27 +33,36 @@ export function Section({
           flexDirection: "row",
           alignItems: "center",
           justifyContent: "space-between",
-          paddingHorizontal: space.lg,
-          paddingBottom: space.sm,
-          borderBottomWidth: 1,
-          borderBottomColor: palette.hairline,
+          paddingHorizontal: space.md + 1,
+          height: 40,
         }}
       >
-        <Text variant="label">{title}</Text>
+        <SectionLabel title={title} />
         {action ? (
           <Pressable
             onPress={action.onPress}
-            hitSlop={12}
+            hitSlop={14}
             accessibilityRole="button"
             accessibilityLabel={`${action.label}: ${title}`}
           >
-            <Text variant="label" tone="accent">
-              {action.label}
-            </Text>
+            {({ pressed }) => (
+              <Text variant="label" tone="accent" style={{ opacity: pressed ? 0.6 : 1 }}>
+                {action.label} →
+              </Text>
+            )}
           </Pressable>
         ) : null}
       </View>
-      {children}
+      <View
+        style={{
+          marginHorizontal: space.md,
+          borderWidth: 1,
+          borderColor: palette.hairline,
+          backgroundColor: palette.surface,
+        }}
+      >
+        {children}
+      </View>
     </View>
   );
 }

@@ -97,15 +97,14 @@ export function Avatar({ label, tint }: { readonly label: string; readonly tint?
       style={{
         width: 32,
         height: 32,
-        borderRadius: 8,
-        backgroundColor: palette.elevated,
+        backgroundColor: palette.background,
         alignItems: "center",
         justifyContent: "center",
         borderWidth: 1,
-        borderColor: palette.hairline,
+        borderColor: palette.hairlineStrong,
       }}
     >
-      <Text variant="label" style={{ color: tint ?? palette.textMuted, letterSpacing: 0.2 }}>
+      <Text variant="label" style={{ color: tint ?? palette.textSecondary, letterSpacing: 0.2 }}>
         {label}
       </Text>
     </View>

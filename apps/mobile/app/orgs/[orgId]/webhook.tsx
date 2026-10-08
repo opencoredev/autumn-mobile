@@ -14,7 +14,7 @@ import { relativeTime } from "@/src/lib/format";
 import { queryClient, queryKeys } from "@/src/lib/query";
 import { useRouteOrg } from "@/src/lib/route-org";
 import { showMessageToast } from "@/src/lib/toast";
-import { radius, space, usePalette } from "@/src/theme";
+import { space, usePalette } from "@/src/theme";
 
 const EVENTS = ["billing.updated", "invoice.finalized"] as const;
 
@@ -75,7 +75,6 @@ function CopyBox({ value, label }: { readonly value: string; readonly label: str
         alignItems: "center",
         gap: space.sm,
         padding: space.md,
-        borderRadius: radius.md,
         borderWidth: 1,
         borderColor: copied ? palette.accent : palette.hairline,
         backgroundColor: pressed ? palette.elevated : palette.surface,

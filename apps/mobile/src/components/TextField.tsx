@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { TextInput, View, type TextInputProps } from "react-native";
-import { fonts, radius, space, usePalette } from "../theme";
+import { fonts, space, usePalette } from "../theme";
 import { Text } from "./Text";
 
 export function TextField({
@@ -36,11 +36,10 @@ export function TextField({
         accessibilityLabel={label}
         style={{
           height: 50,
-          borderRadius: radius.md,
           borderWidth: 1,
-          borderColor: error ? palette.danger : focused ? palette.accent : palette.hairline,
+          borderColor: error ? palette.danger : focused ? palette.accent : palette.hairlineStrong,
           outlineWidth: 0,
-          backgroundColor: palette.surface,
+          backgroundColor: palette.background,
           paddingHorizontal: space.md,
           color: palette.text,
           fontFamily: mono ? fonts.mono : fonts.regular,

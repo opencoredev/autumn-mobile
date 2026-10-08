@@ -8,9 +8,9 @@ import {
   type Subscription,
 } from "@autumn/shared";
 import { initials, longDate, relativeTime } from "../lib/format";
-import { space, usePalette } from "../theme";
+import { usePalette } from "../theme";
 import { Avatar, Row } from "./Row";
-import { StatusLabel } from "./StatusLabel";
+import { InvoiceStatusChip, PlanStatusChip } from "./StatusChip";
 import { Text } from "./Text";
 
 /**
@@ -35,13 +35,8 @@ export function SubscriptionRow({
       {...(withinCustomer ? {} : { leading: <Avatar label={initials(who)} /> })}
       title={withinCustomer ? subscription.planName : who}
       subtitle={
-        <View style={{ flexDirection: "row", alignItems: "center", gap: space.sm }}>
-          <StatusLabel status={subscription.status} />
-          {withinCustomer ? null : (
-            <Text variant="caption" numberOfLines={1} style={{ flexShrink: 1 }}>
-              {subscription.planName}
-            </Text>
-          )}
+        <View style={{ marginTop: 4 }}>
+          <PlanStatusChip subscription={subscription} showPlanName={!withinCustomer} />
         </View>
       }
       trailing={
@@ -51,9 +46,12 @@ export function SubscriptionRow({
       }
       trailingCaption={relativeTime(subscription.createdAt)}
       isLast={isLast ?? false}
-      onPress={() =>
-        router.push(`/org/${orgId}/customer/${encodeURIComponent(subscription.customerId)}`)
-      }
+      {...(withinCustomer
+        ? {}
+        : {
+            onPress: () =>
+              router.push(`/org/${orgId}/customer/${encodeURIComponent(subscription.customerId)}`),
+          })}
     />
   );
 }
@@ -78,7 +76,24 @@ export function OrderRow({
     <Row
       {...(withinCustomer ? {} : { leading: <Avatar label={initials(who)} /> })}
       title={withinCustomer ? plans : who}
-      subtitle={withinCustomer ? longDate(invoice.createdAt) : plans}
+      subtitle={
+        invoice.status === "paid" && !refunded ? (
+          withinCustomer ? (
+            longDate(invoice.createdAt)
+          ) : (
+            plans
+          )
+        ) : (
+          // Paid is the norm; only call out the exceptions, as the dashboard does.
+          <View style={{ marginTop: 4 }}>
+            <InvoiceStatusChip
+              status={invoice.status}
+              total={invoice.total.amount}
+              refunded={invoice.refunded}
+            />
+          </View>
+        )
+      }
       trailing={
         <Text
           variant="mono"
@@ -90,7 +105,7 @@ export function OrderRow({
           {formatMoney(invoice.total)}
         </Text>
       }
-      trailingCaption={invoice.status === "paid" ? relativeTime(invoice.createdAt) : invoice.status}
+      trailingCaption={relativeTime(invoice.createdAt)}
       isLast={isLast ?? false}
       onPress={() => router.push(`/org/${orgId}/order/${encodeURIComponent(invoice.id)}`)}
     />
@@ -118,9 +133,12 @@ export function PurchaseRow({
       trailing={purchase.price ? formatMoney(purchase.price) : "Free"}
       trailingCaption={relativeTime(purchase.createdAt)}
       isLast={isLast ?? false}
-      onPress={() =>
-        router.push(`/org/${orgId}/customer/${encodeURIComponent(purchase.customerId)}`)
-      }
+      {...(withinCustomer
+        ? {}
+        : {
+            onPress: () =>
+              router.push(`/org/${orgId}/customer/${encodeURIComponent(purchase.customerId)}`),
+          })}
     />
   );
 }

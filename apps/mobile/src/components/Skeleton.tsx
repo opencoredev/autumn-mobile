@@ -8,7 +8,7 @@ import Animated, {
   withRepeat,
   withTiming,
 } from "react-native-reanimated";
-import { radius, space, usePalette } from "../theme";
+import { space, usePalette } from "../theme";
 
 export function Skeleton({
   width,
@@ -35,11 +35,7 @@ export function Skeleton({
   const animated = useAnimatedStyle(() => ({ opacity: opacity.value }));
   return (
     <Animated.View
-      style={[
-        { width, height, borderRadius: radius.sm, backgroundColor: palette.skeleton },
-        animated,
-        style,
-      ]}
+      style={[{ width, height, backgroundColor: palette.skeleton }, animated, style]}
     />
   );
 }
@@ -59,7 +55,7 @@ export function SkeletonRows({ count = 5 }: { readonly count?: number }) {
             paddingVertical: 14,
           }}
         >
-          <Skeleton width={32} height={32} style={{ borderRadius: 8 }} />
+          <Skeleton width={32} height={32} />
           <View style={{ flex: 1, gap: 6 }}>
             <Skeleton width={`${55 - (index % 3) * 10}%`} height={13} />
             <Skeleton width={`${35 - (index % 2) * 8}%`} height={11} />

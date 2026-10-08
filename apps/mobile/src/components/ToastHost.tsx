@@ -16,7 +16,7 @@ import { formatMoney } from "@autumn/shared";
 import { celebrate } from "../lib/celebrate";
 import { useOrgs } from "../lib/orgs";
 import { subscribeToToasts, type Toast } from "../lib/toast";
-import { radius, space, usePalette } from "../theme";
+import { space, usePalette } from "../theme";
 import { PixelIcon } from "./PixelIcon";
 import { Text } from "./Text";
 
@@ -69,7 +69,7 @@ function SaleToast({
   const router = useRouter();
   const { setActiveOrgId, orgs } = useOrgs();
   const reduceMotion = useReducedMotion();
-  const colors = [palette.accent, palette.pink, palette.accentText, palette.trial];
+  const colors = [palette.accent, palette.magenta, palette.accentText, palette.onAccent];
 
   const open = () => {
     const org = orgs.find((candidate) => candidate.id === toast.data.orgId);
@@ -88,7 +88,6 @@ function SaleToast({
         alignItems: "center",
         gap: space.md,
         padding: space.md,
-        borderRadius: radius.lg,
         backgroundColor: palette.elevated,
         borderWidth: 1,
         borderColor: palette.hairline,
@@ -110,7 +109,6 @@ function SaleToast({
           style={{
             width: 48,
             height: 48,
-            borderRadius: radius.md,
             backgroundColor: palette.accentSoft,
             alignItems: "center",
             justifyContent: "center",
@@ -194,7 +192,6 @@ export function ToastHost() {
             accessibilityRole="alert"
             style={{
               padding: space.md,
-              borderRadius: radius.lg,
               backgroundColor: palette.elevated,
               borderWidth: 1,
               borderColor: toast.tone === "error" ? palette.danger : palette.hairline,
