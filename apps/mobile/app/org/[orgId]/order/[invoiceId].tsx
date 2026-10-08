@@ -58,11 +58,7 @@ function OrderDetail({ org, invoiceId }: { readonly org: Org; readonly invoiceId
     >
       <View style={{ paddingHorizontal: space.lg, paddingTop: space.md, gap: 6 }}>
         <View style={{ flexDirection: "row", alignItems: "center", gap: space.sm }}>
-          <InvoiceStatusChip
-            status={invoice.status}
-            total={invoice.total.amount}
-            refunded={invoice.refunded}
-          />
+          <InvoiceStatusChip invoice={invoice} />
           <Text variant="label" tone="faint">
             {longDate(invoice.createdAt)}
           </Text>

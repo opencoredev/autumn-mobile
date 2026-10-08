@@ -105,7 +105,8 @@ const light: Palette = {
   text: "#121212",
   textSecondary: "#444444",
   textMuted: "#666666",
-  textFaint: "#767676",
+  // 5.2:1 on #FAFAF9; the dashboard's #767676 is 4.35:1 here.
+  textFaint: "#6B6B6B",
   accent: "#8838FF",
   accentText: "#7A2EF0",
   accentSoft: "#F6F0FF",

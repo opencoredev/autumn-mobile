@@ -86,11 +86,7 @@ export function OrderRow({
         ) : (
           // Paid is the norm; only call out the exceptions, as the dashboard does.
           <View style={{ marginTop: 4 }}>
-            <InvoiceStatusChip
-              status={invoice.status}
-              total={invoice.total.amount}
-              refunded={invoice.refunded}
-            />
+            <InvoiceStatusChip invoice={invoice} />
           </View>
         )
       }

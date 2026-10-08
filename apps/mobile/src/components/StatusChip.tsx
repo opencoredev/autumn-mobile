@@ -1,7 +1,7 @@
-import type { ReactNode } from "react";
+import { useId, type ReactNode } from "react";
 import { View } from "react-native";
-import Svg, { Path, Rect } from "react-native-svg";
-import type { InvoiceStatus, Subscription, SubscriptionStatus } from "@autumn/shared";
+import Svg, { Defs, Mask, Path, Rect } from "react-native-svg";
+import type { Invoice, InvoiceStatus, Subscription, SubscriptionStatus } from "@autumn/shared";
 import { radius, usePalette, type Palette } from "../theme";
 import { Text } from "./Text";
 
@@ -22,9 +22,44 @@ const GLYPHS = {
   x: "M5.7 5.7l4.6 4.6M10.3 5.7l-4.6 4.6",
   pencil: "M5 11l.5-2 4-4 1.5 1.5-4 4z",
   refresh: "M5 8a3 3 0 1 0 1-2.2M5 4.6v1.8h1.8",
-  calendar: "M5 6h6M5 6v5h6V6M6.5 4.5v2M9.5 4.5v2",
 } as const;
-type Glyph = keyof typeof GLYPHS;
+
+/** Filled Phosphor icons (256×256) knocked out of a solid tile, verbatim. */
+const ICON_GLYPHS = {
+  calendar:
+    "M48 72h160v40H48zM48 112h24v96H48zM184 112h24v96h-24zM48 184h160v24H48zM72 32h24v48H72zM160 32h24v48h-24z",
+} as const;
+const ICON_GLYPH_SCALE = 11 / 256;
+
+type Glyph = keyof typeof GLYPHS | keyof typeof ICON_GLYPHS;
+
+function isIconGlyph(glyph: Glyph): glyph is keyof typeof ICON_GLYPHS {
+  return glyph in ICON_GLYPHS;
+}
+
+/** Glyph ink per tone, from the dashboard's STATUS_TONES (--glyph). */
+function glyphInk(palette: Palette, tone: Tone): string {
+  if (tone === "amber") return "#2A1C05";
+  if (palette.scheme === "light") return "#FFFFFF";
+  switch (tone) {
+    case "green":
+      return "#0E1C15";
+    case "blue":
+      return "#0C1726";
+    case "red":
+      return "#2A0C0D";
+    case "orange":
+      return "#2A1405";
+    case "purple":
+      return "#1A0F33";
+    case "neutral":
+      return "#161616";
+    default: {
+      const _exhaustive: never = tone;
+      return _exhaustive;
+    }
+  }
+}
 
 function toneColor(palette: Palette, tone: Tone): string {
   switch (tone) {
@@ -51,13 +86,32 @@ function toneColor(palette: Palette, tone: Tone): string {
 
 export function StatusGlyph({ tone, glyph }: { readonly tone: Tone; readonly glyph: Glyph }) {
   const palette = usePalette();
+  const maskId = `glyph${useId().replace(/[^a-zA-Z0-9]/g, "")}`;
+  const fill = toneColor(palette, tone);
+  if (isIconGlyph(glyph)) {
+    return (
+      <Svg width={16} height={16} viewBox="0 0 16 16">
+        <Defs>
+          <Mask id={maskId}>
+            <Rect width={16} height={16} fill="white" />
+            <Path
+              d={ICON_GLYPHS[glyph]}
+              fill="black"
+              transform={`translate(2.5 2.5) scale(${ICON_GLYPH_SCALE})`}
+            />
+          </Mask>
+        </Defs>
+        <Rect width={16} height={16} rx={4.5} fill={fill} mask={`url(#${maskId})`} />
+      </Svg>
+    );
+  }
   return (
     <Svg width={14} height={14} viewBox="0 0 16 16">
-      <Rect x={1} y={1} width={14} height={14} rx={radius.glyph} fill={toneColor(palette, tone)} />
+      <Rect x={1} y={1} width={14} height={14} rx={radius.glyph} fill={fill} />
       <Path
         d={GLYPHS[glyph]}
         fill="none"
-        stroke={palette.onStatus}
+        stroke={glyphInk(palette, tone)}
         strokeWidth={1.7}
         strokeLinecap="round"
         strokeLinejoin="round"
@@ -198,19 +252,14 @@ export function PlanStatusChip({
 }
 
 /** Dashboard CustomerInvoiceStatus: refunds override "Paid". */
-export function InvoiceStatusChip({
-  status,
-  total,
-  refunded,
-}: {
-  readonly status: InvoiceStatus;
-  readonly total: number;
-  readonly refunded: number;
-}) {
+export function InvoiceStatusChip({ invoice }: { readonly invoice: Invoice }) {
+  const { status, refunded } = invoice;
   if (status === "paid" && refunded > 0) {
+    // Same comparison as the dashboard: refunds against what was actually paid.
+    const paid = invoice.netPaid ? invoice.netPaid.amount + refunded : invoice.total.amount;
     return (
       <StatusChip tone="amber" glyph="refresh">
-        {refunded >= Math.abs(total) ? "Fully refunded" : "Partially refunded"}
+        {refunded >= Math.abs(paid) ? "Fully Refunded" : "Partially Refunded"}
       </StatusChip>
     );
   }

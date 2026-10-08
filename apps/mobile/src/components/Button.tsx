@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { ActivityIndicator, Pressable, View } from "react-native";
+import { useReducedMotion } from "react-native-reanimated";
 import Svg, { Path } from "react-native-svg";
 import { space, usePalette } from "../theme";
 import { Text } from "./Text";
@@ -41,6 +42,7 @@ export function Button({
   readonly icon?: ReactNode;
 }) {
   const palette = usePalette();
+  const reduceMotion = useReducedMotion();
   const fill =
     variant === "primary" ? palette.accent : variant === "ghost" ? "transparent" : palette.elevated;
   const textColor =
@@ -74,7 +76,7 @@ export function Button({
         paddingLeft: space.lg,
         paddingRight: showTile ? space.sm : space.lg,
         opacity: inactive ? 0.45 : 1,
-        transform: [{ scale: pressed ? 0.96 : 1 }],
+        transform: [{ scale: pressed && !reduceMotion ? 0.96 : 1 }],
       })}
     >
       <Text variant="bodyStrong" style={{ color: textColor }}>
