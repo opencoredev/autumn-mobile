@@ -28,8 +28,9 @@ export default function NewOrgScreen() {
       }));
       setSecretKey("");
       setActiveOrgId(org.id);
-      if (router.canDismiss()) router.dismissAll();
-      router.push(`/orgs/${org.id}/webhook`);
+      // Replace the modal with setup. On the first org the route guards swap
+      // the whole stack underneath, so dismissing would have nothing to pop.
+      router.replace(`/orgs/${org.id}/webhook`);
     },
   });
 

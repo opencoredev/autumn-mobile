@@ -1,4 +1,4 @@
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import * as Clipboard from "expo-clipboard";
 import { useState } from "react";
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, View } from "react-native";
@@ -104,6 +104,15 @@ export default function WebhookSetupScreen() {
 function WebhookSetup({ org }: { readonly org: Org }) {
   const palette = usePalette();
   const [secret, setSecret] = useState("");
+
+  // Until the first event lands, poll so the status flips live when the user hits
+  // "Send Test Event" in Autumn.
+  useQuery({
+    queryKey: queryKeys.orgs,
+    queryFn: () => api.listOrgs(),
+    refetchInterval: org.lastWebhookAt === null ? 4000 : false,
+    refetchOnMount: "always",
+  });
 
   const save = useMutation({
     mutationFn: () => api.setWebhookSecret(org.id, secret.trim()),
