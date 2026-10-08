@@ -145,7 +145,22 @@ export function buildFixtures(now: number) {
     },
   ];
 
-  const customers = COMPANIES.map((name, index) => ({
+  // 50 more quiet customers so the list has to paginate.
+  const PREFIXES = [
+    "Blue",
+    "North",
+    "Bright",
+    "Quiet",
+    "Silver",
+    "Lunar",
+    "Pine",
+    "Atlas",
+    "Nova",
+    "Ember",
+  ];
+  const SUFFIXES = ["Works", "Labs", "Systems", "Partners", "Collective"];
+  const extraNames = PREFIXES.flatMap((prefix) => SUFFIXES.map((suffix) => `${prefix} ${suffix}`));
+  const customers = [...COMPANIES, ...extraNames].map((name, index) => ({
     id: `cus_demo_${index + 1}`,
     name,
     created_at: now - (index * 5 + 3) * DAY,
@@ -173,7 +188,7 @@ export function buildFixtures(now: number) {
     "seats",
     "pro",
   ];
-  const subscriptions = customers.map((customer, index) => {
+  const subscriptions = customers.slice(0, COMPANIES.length).map((customer, index) => {
     const planId = subscriptionPlan[index] ?? "pro";
     const startedAt = now - (index * 3 + 0.5) * DAY - 40 * DAY * (index % 3 === 2 ? 1 : 0);
     return {
@@ -205,6 +220,28 @@ export function buildFixtures(now: number) {
     canceled_at: now - 60 * DAY,
     started_at: now - 120 * DAY,
     created_at: now - 120 * DAY,
+  });
+
+  // Every third extra customer pays for Pro, started long ago.
+  customers.slice(COMPANIES.length).forEach((customer, index) => {
+    if (index % 3 !== 0) return;
+    const startedAt = now - (200 + index) * DAY;
+    subscriptions.push({
+      ...subscriptions[0]!,
+      id: `sub_extra_${index}`,
+      plan_id: "pro",
+      add_on: false,
+      past_due: false,
+      canceled_at: null,
+      expires_at: null,
+      trial_ends_at: null,
+      started_at: startedAt,
+      current_period_start: startedAt,
+      current_period_end: startedAt + 30 * DAY,
+      quantity: 1,
+      customer_id: customer.id,
+      created_at: startedAt,
+    });
   });
 
   const purchases = [2, 7, 10].map((customerIndex, index) => ({
@@ -348,8 +385,66 @@ export function createFakeAutumn(args: { now: number; validKey: string; fixtures
         const customer = data.customers.find((row) => row.id === body.customer_id);
         if (!customer) return Response.json({ message: "Customer not found" }, { status: 404 });
         const expand = Array.isArray(body.expand) ? body.expand : [];
+        const index = data.customers.indexOf(customer);
         return Response.json({
           ...withEmbedded(customer),
+          balances: {
+            messages: {
+              object: "balance",
+              feature_id: "messages",
+              ...(expand.includes("balances.feature")
+                ? { feature: { id: "messages", name: "Messages" } }
+                : {}),
+              granted: 1000,
+              remaining: 1000 - ((index * 137) % 1000),
+              usage: (index * 137) % 1000,
+              unlimited: false,
+              overage_allowed: false,
+              max_purchase: null,
+              next_reset_at: args.now + 12 * DAY,
+            },
+            api_calls: {
+              object: "balance",
+              feature_id: "api_calls",
+              ...(expand.includes("balances.feature")
+                ? { feature: { id: "api_calls", name: "API calls" } }
+                : {}),
+              granted: 50000,
+              remaining: 50000 - ((index * 7919) % 50000),
+              usage: (index * 7919) % 50000,
+              unlimited: false,
+              overage_allowed: true,
+              max_purchase: null,
+              next_reset_at: args.now + 12 * DAY,
+            },
+            seats: {
+              object: "balance",
+              feature_id: "seats",
+              ...(expand.includes("balances.feature")
+                ? { feature: { id: "seats", name: "Seats" } }
+                : {}),
+              granted: 0,
+              remaining: 0,
+              usage: 4,
+              unlimited: true,
+              overage_allowed: false,
+              max_purchase: null,
+              next_reset_at: null,
+            },
+          },
+          ...(expand.includes("payment_method")
+            ? {
+                payment_method: {
+                  type: "card",
+                  card: {
+                    brand: index % 2 ? "mastercard" : "visa",
+                    last4: String(4242 + index).slice(-4),
+                    exp_month: 8,
+                    exp_year: 2028,
+                  },
+                },
+              }
+            : {}),
           ...(expand.includes("invoices")
             ? { invoices: data.invoices.filter((row) => row.customer_id === customer.id) }
             : {}),

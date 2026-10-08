@@ -422,6 +422,30 @@ describe("dashboard data", () => {
     expect(detail.customer.name).toBe("Hooli");
     expect(detail.invoices.length).toBeGreaterThan(0);
     expect(detail.subscriptions[0]?.status).toBe("canceling");
+    expect(detail.balances.map((balance) => balance.featureName)).toEqual([
+      "API calls",
+      "Messages",
+      "Seats",
+    ]);
+    expect(detail.balances.find((balance) => balance.featureId === "seats")?.unlimited).toBe(true);
+    expect(detail.paymentMethod).toMatchObject({
+      last4: expect.stringMatching(/^\d{4}$/),
+      expMonth: 8,
+    });
+    const listed = parse(CustomerPageSchema, await h.request(`${base}/customers`, { token }));
+    expect(listed.items).toHaveLength(50);
+    expect(listed.nextCursor).not.toBeNull();
+    const rest = parse(
+      CustomerPageSchema,
+      await h.request(`${base}/customers?cursor=${listed.nextCursor}`, { token }),
+    );
+    expect(rest.items).toHaveLength(12);
+    expect(rest.nextCursor).toBeNull();
+    const hooliRow = [...listed.items, ...rest.items].find(
+      (customer) => customer.id === "cus_demo_6",
+    );
+    expect(hooliRow?.subscriptions.map((sub) => sub.status)).toEqual(["canceling"]);
+    expect(hooliRow?.subscriptions[0]?.customerName).toBe("Hooli");
     const detailText = JSON.stringify(detail);
     expect(detailText).not.toMatch(/email|metadata|organic/i);
     expect(detailText).not.toContain("@");

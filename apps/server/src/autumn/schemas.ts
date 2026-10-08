@@ -128,8 +128,36 @@ export const CustomerRaw = z.object({
   subscriptions: z.array(z.unknown()).default([]),
   purchases: z.array(z.unknown()).default([]),
   invoices: z.array(z.unknown()).optional(),
+  // Keyed by feature id (API 2.5 "V1 balances").
+  balances: z.record(z.string(), z.unknown()).nullish(),
+  // A processor payment method object when expanded; shape varies by processor.
+  payment_method: z.unknown().nullish(),
 });
 export type CustomerRaw = z.infer<typeof CustomerRaw>;
+
+export const BalanceRaw = z.object({
+  feature_id: z.string(),
+  feature: z.object({ name: z.string().nullish() }).nullish(),
+  granted: z.number().default(0),
+  remaining: z.number().default(0),
+  usage: z.number().default(0),
+  unlimited: z.boolean().default(false),
+  next_reset_at: nullishNumber,
+});
+export type BalanceRaw = z.infer<typeof BalanceRaw>;
+
+/** Only the card summary is read; nothing personal (no billing name or address). */
+export const PaymentMethodRaw = z.object({
+  type: z.string().default("card"),
+  card: z
+    .object({
+      brand: z.string().nullish(),
+      last4: z.string().nullish(),
+      exp_month: z.number().nullish(),
+      exp_year: z.number().nullish(),
+    })
+    .nullish(),
+});
 
 export const ListEnvelope = z.object({
   list: z.array(z.unknown()),

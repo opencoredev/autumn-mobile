@@ -2,7 +2,10 @@ import { useInfiniteQuery } from "@tanstack/react-query";
 import { useRouter } from "expo-router";
 import { useMemo, useState } from "react";
 import { Pressable, TextInput, View } from "react-native";
+import type { CustomerSummary } from "@autumn/shared";
 import { PagedList } from "@/src/components/PagedList";
+import { PlanStatusChip } from "@/src/components/StatusChip";
+import { Text } from "@/src/components/Text";
 import { PixelIcon } from "@/src/components/PixelIcon";
 import { Avatar, Row } from "@/src/components/Row";
 import { api } from "@/src/lib/api";
@@ -74,6 +77,31 @@ function SearchField({
   );
 }
 
+/** Up to two plan chips, as in the dashboard's customer list, then "+N". */
+function CustomerPlans({ customer }: { readonly customer: CustomerSummary }) {
+  const shown = customer.subscriptions.slice(0, 2);
+  const extra = customer.subscriptions.length - shown.length + customer.purchaseCount;
+  if (shown.length === 0) {
+    return (
+      <Text variant="caption">
+        {customer.purchaseCount > 0
+          ? `${customer.purchaseCount} one-time ${customer.purchaseCount === 1 ? "purchase" : "purchases"}`
+          : "No active plan"}
+      </Text>
+    );
+  }
+  return (
+    <View
+      style={{ flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 6, marginTop: 4 }}
+    >
+      {shown.map((subscription) => (
+        <PlanStatusChip key={subscription.id} subscription={subscription} />
+      ))}
+      {extra > 0 ? <Text variant="caption">+{extra}</Text> : null}
+    </View>
+  );
+}
+
 export default function CustomersScreen() {
   const org = useActiveOrg();
   const router = useRouter();
@@ -100,9 +128,7 @@ export default function CustomersScreen() {
           <Row
             leading={<Avatar label={initials(customer.name ?? customer.id)} />}
             title={customer.name ?? customer.id}
-            subtitle={
-              customer.planNames.length > 0 ? customer.planNames.join(", ") : "No active plan"
-            }
+            subtitle={<CustomerPlans customer={customer} />}
             trailingCaption={relativeTime(customer.createdAt)}
             showChevron
             onPress={() =>

@@ -1,5 +1,7 @@
 import type {
   CustomerSummary,
+  FeatureBalance,
+  PaymentMethod,
   Invoice,
   Money,
   Plan,
@@ -7,7 +9,7 @@ import type {
   Subscription,
   SubscriptionStatus,
 } from "@autumn/shared";
-import { SubscriptionRaw, PurchaseRaw, parseRows } from "./schemas";
+import { BalanceRaw, PaymentMethodRaw, PurchaseRaw, SubscriptionRaw, parseRows } from "./schemas";
 import type { CustomerRaw, InvoiceRaw, PlanRaw } from "./schemas";
 
 /** Pure transforms from Autumn's wire shapes to the shared contracts. */
@@ -166,17 +168,59 @@ export function embeddedPurchases(raw: CustomerRaw): PurchaseRaw[] {
 export function customerSummary(args: {
   raw: CustomerRaw & { id: string };
   plans: PlanMap;
+  names: NameMap;
+  currency: string;
   now: number;
 }): CustomerSummary {
-  const active = embeddedSubscriptions(args.raw)
-    .filter((sub) => !sub.add_on && deriveStatus(sub, args.now) !== "expired")
-    .sort((a, b) => b.started_at - a.started_at);
+  const customerId = args.raw.id;
+  const subscriptions = embeddedSubscriptions(args.raw)
+    .map((raw) =>
+      subscriptionView({
+        raw,
+        customerId,
+        plans: args.plans,
+        names: args.names,
+        currency: args.currency,
+        now: args.now,
+      }),
+    )
+    .filter((sub) => sub.status !== "expired")
+    .sort((a, b) => Number(a.addOn) - Number(b.addOn) || b.startedAt - a.startedAt);
   return {
-    id: args.raw.id,
+    id: customerId,
     name: args.raw.name,
     createdAt: args.raw.created_at,
     env: args.raw.env,
-    planNames: active.map((sub) => args.plans.get(sub.plan_id)?.name ?? sub.plan_id),
+    planNames: subscriptions.filter((sub) => !sub.addOn).map((sub) => sub.planName),
+    subscriptions,
+    purchaseCount: embeddedPurchases(args.raw).filter((purchase) => purchase.status === "active")
+      .length,
+  };
+}
+
+export function featureBalances(raw: CustomerRaw): FeatureBalance[] {
+  return parseRows(BalanceRaw, Object.values(raw.balances ?? {}))
+    .map((balance) => ({
+      featureId: balance.feature_id,
+      featureName: balance.feature?.name ?? balance.feature_id,
+      granted: balance.granted,
+      usage: balance.usage,
+      remaining: balance.remaining,
+      unlimited: balance.unlimited,
+      nextResetAt: balance.next_reset_at,
+    }))
+    .sort((a, b) => a.featureName.localeCompare(b.featureName));
+}
+
+export function paymentMethod(raw: CustomerRaw): PaymentMethod | null {
+  const parsed = PaymentMethodRaw.safeParse(raw.payment_method);
+  if (!parsed.success) return null;
+  const card = parsed.data.card;
+  return {
+    brand: card?.brand ?? parsed.data.type,
+    last4: card?.last4 ?? null,
+    expMonth: card?.exp_month ?? null,
+    expYear: card?.exp_year ?? null,
   };
 }
 

@@ -16,6 +16,8 @@ import {
   deriveStatus,
   embeddedPurchases,
   embeddedSubscriptions,
+  featureBalances,
+  paymentMethod,
   invoiceView,
   lifetimeValue,
   purchaseView,
@@ -212,7 +214,10 @@ dashboardRoutes.get("/:orgId/plans", async (c) => {
 dashboardRoutes.get("/:orgId/customers", async (c) => {
   const { org, scope, client } = await orgScope(c);
   const now = c.var.deps.now();
-  const plans = await cachedPlans(scope, org, client);
+  const [plans, currency] = await Promise.all([
+    cachedPlans(scope, org, client),
+    orgCurrency(scope, org),
+  ]);
   const search = c.req.query("search")?.trim() || null;
   const page = await client.listCustomers({
     cursor: c.req.query("cursor") ?? null,
@@ -221,7 +226,9 @@ dashboardRoutes.get("/:orgId/customers", async (c) => {
   });
   const items: CustomerSummary[] = page.items.flatMap((raw) => {
     const id = raw.id;
-    return id ? [customerSummary({ raw: { ...raw, id }, plans, now })] : [];
+    if (!id) return [];
+    const names = new Map(raw.name ? [[id, raw.name]] : []);
+    return [customerSummary({ raw: { ...raw, id }, plans, names, currency, now })];
   });
   const body: Page<CustomerSummary> = { items, nextCursor: page.nextCursor };
   return c.json(body);
@@ -243,7 +250,7 @@ dashboardRoutes.get("/:orgId/customers/:customerId", async (c) => {
 
   const body: CustomerDetail = {
     customer: {
-      ...customerSummary({ raw: { ...raw, id: customerId }, plans, now }),
+      ...customerSummary({ raw: { ...raw, id: customerId }, plans, names, currency, now }),
       stripeId: raw.stripe_id,
     },
     subscriptions: newestFirst(
@@ -258,6 +265,8 @@ dashboardRoutes.get("/:orgId/customers/:customerId", async (c) => {
     ),
     invoices: newestFirst(invoices.map((invoice) => invoiceView({ raw: invoice, plans, names }))),
     lifetimeValue: lifetimeValue(invoices),
+    balances: featureBalances(raw),
+    paymentMethod: paymentMethod(raw),
   };
   return c.json(body);
 });

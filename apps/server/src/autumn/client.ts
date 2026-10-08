@@ -135,7 +135,10 @@ export function createAutumnClient(args: {
       }),
     getCustomer: async (customerId: string): Promise<CustomerRaw> => {
       const parsed = CustomerRaw.safeParse(
-        await post("/v1/customers.get", { customer_id: customerId, expand: ["invoices"] }),
+        await post("/v1/customers.get", {
+          customer_id: customerId,
+          expand: ["invoices", "balances.feature", "payment_method"],
+        }),
       );
       if (!parsed.success) throw new HttpError("not_found", "Customer not found.");
       return parsed.data;
