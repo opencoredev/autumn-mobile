@@ -1,7 +1,7 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { createAsyncStoragePersister } from "@tanstack/query-async-storage-persister";
 import { QueryClient } from "@tanstack/react-query";
-import { ApiError, type OrgId } from "@autumn/shared";
+import { ApiError, CONTRACTS_REVISION, type OrgId } from "@autumn/shared";
 
 export const queryClient = new QueryClient({
   defaultOptions: {
@@ -23,8 +23,8 @@ export const persister = createAsyncStoragePersister({
   throttleTime: 1000,
 });
 
-/** Bump to drop every persisted cache entry after a contract change. */
-export const CACHE_BUSTER = "2";
+/** Persisted cache entries from an older contract revision are dropped on launch. */
+export const CACHE_BUSTER = `contracts-${CONTRACTS_REVISION}`;
 
 export const queryKeys = {
   me: ["me"] as const,

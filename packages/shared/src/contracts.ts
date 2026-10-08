@@ -283,9 +283,34 @@ export const CustomerSummarySchema = z.object({
   env: KeyEnvSchema,
   /** Names of the customer's active base plans, most recent first. */
   planNames: z.array(z.string()),
+  /** Live (non-expired) plans, base plans first, newest first. */
+  subscriptions: z.array(SubscriptionSchema),
+  /** Count of one-time purchases still active. */
+  purchaseCount: z.number(),
 });
 export type CustomerSummary = z.infer<typeof CustomerSummarySchema>;
 export const CustomerPageSchema = pageSchema(CustomerSummarySchema);
+
+/** A customer's balance for one feature, from customers.get `balances`. */
+export const FeatureBalanceSchema = z.object({
+  featureId: z.string(),
+  featureName: z.string(),
+  granted: z.number(),
+  usage: z.number(),
+  remaining: z.number(),
+  unlimited: z.boolean(),
+  nextResetAt: z.number().nullable(),
+});
+export type FeatureBalance = z.infer<typeof FeatureBalanceSchema>;
+
+export const PaymentMethodSchema = z.object({
+  /** Card brand ("visa") or payment method type ("us_bank_account"). */
+  brand: z.string(),
+  last4: z.string().nullable(),
+  expMonth: z.number().nullable(),
+  expYear: z.number().nullable(),
+});
+export type PaymentMethod = z.infer<typeof PaymentMethodSchema>;
 
 export const CustomerDetailSchema = z.object({
   customer: CustomerSummarySchema.extend({
@@ -295,6 +320,8 @@ export const CustomerDetailSchema = z.object({
   purchases: z.array(PurchaseSchema),
   invoices: z.array(InvoiceSchema),
   lifetimeValue: z.array(MoneySchema),
+  balances: z.array(FeatureBalanceSchema),
+  paymentMethod: PaymentMethodSchema.nullable(),
 });
 export type CustomerDetail = z.infer<typeof CustomerDetailSchema>;
 
@@ -376,3 +403,10 @@ export type TestPushResponse = z.infer<typeof TestPushResponseSchema>;
 
 export const HealthResponseSchema = z.object({ status: z.literal("ok") });
 export type HealthResponse = z.infer<typeof HealthResponseSchema>;
+
+/**
+ * Bump whenever any schema above changes shape. The app uses it as its
+ * persisted-cache key, so phones never hydrate data in an old shape.
+ * apps/server/test/contracts.test.ts fails if a schema changes without a bump.
+ */
+export const CONTRACTS_REVISION = 3;
