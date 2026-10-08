@@ -1,0 +1,12 @@
+node_modules/
+.expo/
+.wrangler/
+dist/
+.turbo/
+coverage/
+*.log
+.dev.vars
+.env
+.env.*
+!.env.example
+.DS_Store

@@ -1,0 +1,7 @@
+{
+  "$schema": "https://oxc.rs/schema/oxlint.json",
+  "rules": {
+    "no-unused-vars": "error"
+  },
+  "ignorePatterns": ["node_modules", ".expo", ".wrangler", "dist", "bun.lock"]
+}

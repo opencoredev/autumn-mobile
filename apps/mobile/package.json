@@ -1,0 +1,23 @@
+{
+  "name": "@autumn/mobile",
+  "version": "0.1.0",
+  "private": true,
+  "main": "expo-router/entry",
+  "scripts": {
+    "dev": "expo start",
+    "typecheck": "tsc --noEmit",
+    "lint": "oxlint .",
+    "build": "expo export"
+  },
+  "dependencies": {
+    "@autumn/shared": "workspace:*",
+    "expo": "^57.0.27",
+    "expo-router": "^57.0.25",
+    "react": "19.2.3",
+    "react-native": "0.86.3"
+  },
+  "devDependencies": {
+    "@expo/metro-config": "^57.0.13",
+    "@types/react": "~19.2.4"
+  }
+}

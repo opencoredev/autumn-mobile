@@ -1,0 +1,8 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "autumn-mobile-server",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-10-08",
+  "observability": { "enabled": false },
+  // Add D1/KV bindings and secrets here when the backend is implemented.
+}

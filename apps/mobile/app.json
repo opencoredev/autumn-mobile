@@ -1,0 +1,13 @@
+{
+  "expo": {
+    "name": "Autumn Dashboard",
+    "slug": "autumn-dashboard",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "scheme": "autumn-dashboard",
+    "userInterfaceStyle": "automatic",
+    "ios": { "supportsTablet": true },
+    "android": {},
+    "plugins": ["expo-router"]
+  }
+}

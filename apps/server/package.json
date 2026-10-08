@@ -1,0 +1,20 @@
+{
+  "name": "@autumn/server",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "typecheck": "tsc --noEmit",
+    "lint": "oxlint src",
+    "build": "wrangler deploy --dry-run"
+  },
+  "dependencies": {
+    "@autumn/shared": "workspace:*",
+    "hono": "^4.13.13"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^5.20261008.1",
+    "wrangler": "^4.149.0"
+  }
+}
