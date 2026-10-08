@@ -16,7 +16,8 @@ import {
   useRouter,
 } from "expo-router";
 import { StatusBar } from "expo-status-bar";
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import type { PushData } from "@autumn/shared";
 import { View } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
@@ -30,8 +31,8 @@ import {
   syncOrgChannels,
 } from "@/src/lib/notifications";
 import { OrgsProvider, useOrgs } from "@/src/lib/orgs";
-import { CACHE_BUSTER, persister, queryClient, queryKeys } from "@/src/lib/query";
-import { showSaleToast } from "@/src/lib/toast";
+import { CACHE_BUSTER, persister, queryClient } from "@/src/lib/query";
+import { showMessageToast, showSaleToast } from "@/src/lib/toast";
 import { fonts, usePalette } from "@/src/theme";
 
 void SplashScreen.preventAutoHideAsync();
@@ -41,8 +42,13 @@ configureForegroundHandling();
 function NotificationBridge() {
   const router = useRouter();
   const { state } = useAuth();
-  const { orgs, setActiveOrgId } = useOrgs();
+  const { orgs, isLoading: orgsLoading, setActiveOrgId } = useOrgs();
   const signedIn = state.kind === "signedIn";
+  const [pendingOpen, setPendingOpen] = useState<PushData | null>(null);
+  const orgsRef = useRef(orgs);
+  useEffect(() => {
+    orgsRef.current = orgs;
+  }, [orgs]);
 
   useEffect(() => {
     if (signedIn) void syncOrgChannels(orgs);
@@ -53,22 +59,31 @@ function NotificationBridge() {
     void registerForPush({ prompt: false }).catch(() => undefined);
   }, [signedIn]);
 
+  // Subscribe once; taps are queued until auth and orgs are known.
   useEffect(() => {
     const removeReceived = addSaleReceivedListener((data) => {
+      if (!orgsRef.current.some((org) => org.id === data.orgId)) return;
       showSaleToast(data);
-      const org = orgs.find((candidate) => candidate.id === data.orgId);
-      if (org) void queryClient.invalidateQueries({ queryKey: queryKeys.org(org.id) });
+      void queryClient.invalidateQueries({ queryKey: ["org", data.orgId] });
     });
-    const removeOpened = addSaleOpenedListener((data) => {
-      const org = orgs.find((candidate) => candidate.id === data.orgId);
-      if (org) setActiveOrgId(org.id);
-      router.push(data.path);
-    });
+    const removeOpened = addSaleOpenedListener(setPendingOpen);
     return () => {
       removeReceived();
       removeOpened();
     };
-  }, [orgs, router, setActiveOrgId]);
+  }, []);
+
+  useEffect(() => {
+    if (!pendingOpen || !signedIn || orgsLoading) return;
+    const org = orgs.find((candidate) => candidate.id === pendingOpen.orgId);
+    setPendingOpen(null);
+    if (!org) {
+      showMessageToast("That organization isn't in this app anymore.");
+      return;
+    }
+    setActiveOrgId(org.id);
+    router.push(pendingOpen.path);
+  }, [pendingOpen, signedIn, orgsLoading, orgs, router, setActiveOrgId]);
 
   return null;
 }

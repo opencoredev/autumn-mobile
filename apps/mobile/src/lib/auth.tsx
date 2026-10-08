@@ -4,7 +4,7 @@ import { UserSchema, type SessionResponse, type User } from "@autumn/shared";
 import { api, onUnauthorized, setSessionToken } from "./api";
 import { signOutOfGoogle } from "./google-sign-in";
 import { unregisterPush } from "./notifications";
-import { queryClient } from "./query";
+import { persister, queryClient } from "./query";
 import { secureStorage } from "./secure-storage";
 
 const TOKEN_KEY = "autumn-dashboard.session";
@@ -20,6 +20,13 @@ type AuthContextValue = {
   readonly completeSignIn: (session: SessionResponse) => Promise<void>;
   readonly signOut: () => Promise<void>;
 };
+
+/** Clears react-query in memory and its AsyncStorage copy, so nothing survives a sign-out. */
+async function dropCachedData(): Promise<void> {
+  await queryClient.cancelQueries();
+  queryClient.clear();
+  await persister.removeClient();
+}
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
@@ -38,8 +45,11 @@ export function AuthProvider({ children }: { readonly children: ReactNode }) {
 
   const clearLocal = useCallback(async () => {
     setSessionToken(null);
-    await Promise.all([secureStorage.remove(TOKEN_KEY), secureStorage.remove(USER_KEY)]);
-    queryClient.clear();
+    await Promise.all([
+      secureStorage.remove(TOKEN_KEY),
+      secureStorage.remove(USER_KEY),
+      dropCachedData(),
+    ]);
     setState({ kind: "signedOut" });
   }, []);
 
@@ -70,6 +80,8 @@ export function AuthProvider({ children }: { readonly children: ReactNode }) {
   }, [clearLocal]);
 
   const completeSignIn = useCallback(async (session: SessionResponse) => {
+    // Never let one account start from another account's cached screens.
+    await dropCachedData();
     setSessionToken(session.token);
     await Promise.all([
       secureStorage.set(TOKEN_KEY, session.token),

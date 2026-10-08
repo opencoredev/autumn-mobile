@@ -55,7 +55,18 @@ function SearchField({
           }}
         />
         {value ? (
-          <Pressable onPress={() => onChange("")} hitSlop={10} accessibilityLabel="Clear search">
+          <Pressable
+            onPress={() => onChange("")}
+            accessibilityRole="button"
+            accessibilityLabel="Clear search"
+            style={{
+              width: 44,
+              height: 44,
+              marginRight: -space.md,
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
             <PixelIcon name="close" size={12} color={palette.textMuted} />
           </Pressable>
         ) : null}

@@ -46,6 +46,8 @@ export function useNotificationSettings() {
     },
     onError: (_error, _patch, context) => {
       if (context?.previous) queryClient.setQueryData(queryKeys.settings, context.previous);
+      // Nothing was cached before the optimistic write, so refetch the truth.
+      else void queryClient.invalidateQueries({ queryKey: queryKeys.settings });
       showMessageToast("Couldn't save that setting. Try again.", "error");
     },
     onSuccess: (response) => queryClient.setQueryData(queryKeys.settings, response),

@@ -142,6 +142,7 @@ function SaleToast({
 export function ToastHost() {
   const insets = useSafeAreaInsets();
   const palette = usePalette();
+  const reduceMotion = useReducedMotion();
   const [toast, setToast] = useState<Toast | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -177,8 +178,12 @@ export function ToastHost() {
     >
       <Animated.View
         key={toast.id}
-        entering={SlideInUp.springify().damping(18).stiffness(180)}
-        exiting={FadeOutUp.duration(180)}
+        {...(reduceMotion
+          ? {}
+          : {
+              entering: SlideInUp.springify().damping(18).stiffness(180),
+              exiting: FadeOutUp.duration(180),
+            })}
         accessibilityLiveRegion="polite"
       >
         {toast.kind === "sale" ? (

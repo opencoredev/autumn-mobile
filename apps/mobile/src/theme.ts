@@ -46,7 +46,8 @@ const dark: Palette = {
   hairline: "#232323",
   text: "#EDEDED",
   textMuted: "#A1A1A1",
-  textFaint: "#6E6E6E",
+  // 4.6:1 on black: the faintest text still readable at caption size.
+  textFaint: "#7A7A7A",
   accent: "#8F3CF8",
   accentText: "#B48CFF",
   accentSoft: "rgba(143, 60, 248, 0.16)",
@@ -67,7 +68,7 @@ const light: Palette = {
   hairline: "#E6E6E6",
   text: "#171717",
   textMuted: "#5C5C5C",
-  textFaint: "#8F8F8F",
+  textFaint: "#6B6B6B",
   accent: "#7C3AED",
   accentText: "#6D28D9",
   accentSoft: "rgba(124, 58, 237, 0.1)",
