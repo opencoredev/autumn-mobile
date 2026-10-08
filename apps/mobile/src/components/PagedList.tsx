@@ -29,7 +29,11 @@ export function PagedList<T>({
   readonly isFetchingNextPage: boolean;
   readonly fetchNextPage: () => unknown;
   readonly refetch: () => Promise<unknown>;
-  readonly empty: { readonly title: string; readonly body?: string };
+  readonly empty: {
+    readonly title: string;
+    readonly body?: string;
+    readonly action?: { readonly label: string; readonly onPress: () => void };
+  };
   readonly header?: ReactElement;
 }) {
   const palette = usePalette();
@@ -39,7 +43,18 @@ export function PagedList<T>({
     return (
       <View style={{ flex: 1, backgroundColor: palette.background }}>
         {header}
-        <SkeletonRows count={8} />
+        {/* Same frame and insets as the loaded list, so nothing jumps. */}
+        <View
+          style={{
+            marginHorizontal: space.md,
+            marginTop: space.sm,
+            borderWidth: 1,
+            borderColor: palette.hairline,
+            backgroundColor: palette.surface,
+          }}
+        >
+          <SkeletonRows count={8} />
+        </View>
       </View>
     );
   }
@@ -78,7 +93,11 @@ export function PagedList<T>({
       keyboardShouldPersistTaps="handled"
       ListHeaderComponent={header}
       ListEmptyComponent={
-        <EmptyState title={empty.title} {...(empty.body ? { body: empty.body } : {})} />
+        <EmptyState
+          title={empty.title}
+          {...(empty.body ? { body: empty.body } : {})}
+          {...(empty.action ? { action: empty.action } : {})}
+        />
       }
       ListFooterComponent={isFetchingNextPage ? <SkeletonRows count={2} /> : null}
       onEndReachedThreshold={0.6}

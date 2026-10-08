@@ -20,6 +20,7 @@ import type { PushData } from "@autumn/shared";
 import { View } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
+import { AppHeader } from "@/src/components/AppHeader";
 import { ToastHost } from "@/src/components/ToastHost";
 import { AuthProvider, useAuth } from "@/src/lib/auth";
 import {
@@ -120,11 +121,16 @@ function RootNavigator() {
     <ThemeProvider value={navigationTheme}>
       <Stack
         screenOptions={{
-          headerStyle: { backgroundColor: palette.background },
-          headerShadowVisible: false,
-          headerTintColor: palette.text,
-          headerTitleStyle: { fontFamily: fonts.semibold, fontSize: 17 },
-          headerBackButtonDisplayMode: "minimal",
+          header: ({ options, back, navigation }) => (
+            <AppHeader
+              title={options.title}
+              canGoBack={Boolean(back) || navigation.canGoBack()}
+              onBack={() =>
+                navigation.canGoBack() ? navigation.goBack() : navigation.navigate("(tabs)")
+              }
+              modal={options.presentation === "modal"}
+            />
+          ),
           contentStyle: { backgroundColor: palette.background },
         }}
       >
@@ -136,7 +142,7 @@ function RootNavigator() {
         </Stack.Protected>
         <Stack.Protected guard={signedIn && hasOrgs}>
           <Stack.Screen name="(tabs)" options={{ headerShown: false, animation: "fade" }} />
-          <Stack.Screen name="org/[orgId]/customer/[customerId]" options={{ title: "Customer" }} />
+          <Stack.Screen name="org/[orgId]/customer/[customerId]" options={{ title: "" }} />
           <Stack.Screen name="org/[orgId]/order/[invoiceId]" options={{ title: "Order" }} />
           <Stack.Screen name="org/[orgId]/plan/[planId]" options={{ title: "Plan" }} />
           <Stack.Screen name="subscriptions" options={{ title: "Subscriptions" }} />

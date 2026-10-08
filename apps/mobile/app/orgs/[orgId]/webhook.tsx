@@ -161,8 +161,8 @@ function WebhookSetup({ org }: { readonly org: Org }) {
             </Text>
           </View>
           <Text variant="body" tone="muted">
-            Autumn sends billing events to a webhook. Point one at this app and every sale for{" "}
-            {org.name} reaches your phone.
+            Add this URL as a webhook endpoint in Autumn, and sales for {org.name} arrive on this
+            phone.
           </Text>
         </View>
         <View style={{ borderTopWidth: 1, borderTopColor: palette.hairline }}>

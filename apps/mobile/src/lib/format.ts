@@ -24,8 +24,11 @@ const longDateFormatter = new Intl.DateTimeFormat("en-US", {
   year: "numeric",
 });
 
-export function shortDate(timestamp: number): string {
-  return dateFormatter.format(timestamp);
+/** "Sep 8", or "Sep 8, 2025" outside the current year. */
+export function shortDate(timestamp: number, now: number = Date.now()): string {
+  return new Date(timestamp).getFullYear() === new Date(now).getFullYear()
+    ? dateFormatter.format(timestamp)
+    : longDateFormatter.format(timestamp);
 }
 
 export function longDate(timestamp: number): string {
@@ -43,7 +46,8 @@ export const STATUS_LABEL: Record<SubscriptionStatus, string> = {
   trialing: "Trial",
   active: "Active",
   past_due: "Past due",
-  canceling: "Canceling",
+  // Spelled as in Autumn's dashboard.
+  canceling: "Cancelling",
   scheduled: "Scheduled",
   expired: "Expired",
 };

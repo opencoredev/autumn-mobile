@@ -1,5 +1,4 @@
 import { useQuery } from "@tanstack/react-query";
-import { Stack } from "expo-router";
 import { RefreshControl, ScrollView, View } from "react-native";
 import { formatMoney, type FeatureBalance, type Org, type PaymentMethod } from "@autumn/shared";
 import { DetailRow } from "@/src/components/DetailRow";
@@ -133,7 +132,6 @@ function CustomerDetail({ org, customerId }: { readonly org: Org; readonly custo
         />
       }
     >
-      <Stack.Screen options={{ title: data?.customer.name ?? "Customer" }} />
       {!data ? (
         query.isError ? (
           <ErrorState error={query.error} onRetry={() => void query.refetch()} />

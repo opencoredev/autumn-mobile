@@ -72,7 +72,9 @@ export default function CatalogueScreen() {
       }
     >
       {query.isPending ? (
-        <SkeletonRows count={6} />
+        <Section title="Plans">
+          <SkeletonRows count={5} />
+        </Section>
       ) : query.isError && plans.length === 0 ? (
         <ErrorState error={query.error} onRetry={() => void query.refetch()} />
       ) : plans.length === 0 ? (

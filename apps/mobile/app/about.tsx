@@ -55,7 +55,11 @@ export default function AboutScreen() {
         <DetailRow label="Keys on this phone" value="Never stored" isLast />
       </Section>
       <Section title="Credits">
-        <Row title="Cha-ching sound" subtitle="Synthesized for this app, CC0" isLast />
+        <Row
+          title="Cha-ching sound"
+          subtitle="Synthesized for this app and released under CC0"
+          isLast
+        />
       </Section>
       <Section title="Links">
         <Row

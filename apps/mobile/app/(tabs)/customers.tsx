@@ -30,7 +30,7 @@ function SearchField({
           flexDirection: "row",
           alignItems: "center",
           gap: space.sm,
-          height: 40,
+          height: 44,
           paddingHorizontal: space.md,
           backgroundColor: palette.surface,
           borderWidth: 1,
@@ -144,7 +144,11 @@ export default function CustomersScreen() {
         refetch={query.refetch}
         empty={
           debounced
-            ? { title: "No matches", body: `No customers match "${debounced}".` }
+            ? {
+                title: `No customers match "${debounced}"`,
+                body: "Search looks at names and customer IDs.",
+                action: { label: "Clear search", onPress: () => setSearch("") },
+              }
             : {
                 title: "No customers yet",
                 body: "Customers you create in Autumn will appear here.",

@@ -74,7 +74,7 @@ function CurrencyTabs({
             onPress={() => onSelect(item.currency)}
             accessibilityRole="tab"
             accessibilityState={{ selected: active }}
-            hitSlop={8}
+            hitSlop={{ top: 10, bottom: 10, left: 2, right: 2 }}
             style={{
               paddingHorizontal: space.sm,
               height: 24,

@@ -29,13 +29,14 @@ export function Segmented<T extends string>({
         const active = option.value === value;
         return (
           <Pressable
+            hitSlop={{ top: 4, bottom: 4 }}
             key={option.value}
             onPress={() => onChange(option.value)}
             accessibilityRole="tab"
             accessibilityState={{ selected: active }}
             style={{
               flex: 1,
-              height: 32,
+              height: 38,
               alignItems: "center",
               justifyContent: "center",
               backgroundColor: active ? palette.accent : "transparent",

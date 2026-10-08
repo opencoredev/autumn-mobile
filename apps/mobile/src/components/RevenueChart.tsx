@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useState } from "react";
 import { View, type LayoutChangeEvent } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
-import Animated, { FadeIn, useReducedMotion } from "react-native-reanimated";
+import Animated, { Easing, FadeInDown, useReducedMotion } from "react-native-reanimated";
 import Svg, { Defs, Line, LinearGradient, Path, Rect, Stop } from "react-native-svg";
 import { scheduleOnRN } from "react-native-worklets";
 import type { RevenueDay } from "@autumn/shared";
@@ -138,7 +138,11 @@ export function RevenueChart({
         accessibilityLabel="Revenue over the last 30 days. Drag to see each day."
       >
         {width > 0 ? (
-          <Animated.View {...(reduceMotion ? {} : { entering: FadeIn.duration(280) })}>
+          <Animated.View
+            {...(reduceMotion
+              ? {}
+              : { entering: FadeInDown.duration(180).easing(Easing.out(Easing.quad)) })}
+          >
             <Svg width={width} height={HEIGHT}>
               <Defs>
                 {/* Autumn's halftone: magenta to violet, fading out, cut into pixels. */}

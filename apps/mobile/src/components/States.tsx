@@ -48,10 +48,12 @@ export function EmptyState({
   icon = "leaf",
   title,
   body,
+  action,
 }: {
   readonly icon?: PixelIconName;
   readonly title: string;
   readonly body?: string;
+  readonly action?: { readonly label: string; readonly onPress: () => void };
 }) {
   const palette = usePalette();
   return (
@@ -62,6 +64,11 @@ export function EmptyState({
         <Text variant="caption" tone="muted">
           {body}
         </Text>
+      ) : null}
+      {action ? (
+        <View style={{ marginTop: space.sm, alignSelf: "flex-start" }}>
+          <Button label={action.label} variant="secondary" onPress={action.onPress} />
+        </View>
       ) : null}
     </View>
   );

@@ -73,6 +73,7 @@ export function Button({
         flexDirection: "row",
         alignItems: "center",
         justifyContent: showTile ? "space-between" : "center",
+        gap: space.lg,
         paddingLeft: space.lg,
         paddingRight: showTile ? space.sm : space.lg,
         opacity: inactive ? 0.45 : 1,
