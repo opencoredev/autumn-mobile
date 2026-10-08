@@ -13,6 +13,31 @@ import {
   type Money,
   type NotificationSettings,
   type ErrorCode,
+  CreateOrgRequestSchema,
+  RenameOrgRequestSchema,
+  ReplaceKeyRequestSchema,
+  SetWebhookSecretRequestSchema,
+  GoogleSignInRequestSchema,
+  AppleSignInRequestSchema,
+  UpdateNotificationSettingsRequestSchema,
+  RegisterDeviceRequestSchema,
+  UnregisterDeviceRequestSchema,
+  OrgListResponseSchema,
+  OrgResponseSchema,
+  OkResponseSchema,
+  SessionResponseSchema,
+  MeResponseSchema,
+  OverviewResponseSchema,
+  SubscriptionPageSchema,
+  PurchasePageSchema,
+  InvoicePageSchema,
+  InvoiceResponseSchema,
+  PlanListResponseSchema,
+  CustomerPageSchema,
+  CustomerDetailSchema,
+  NotificationSettingsResponseSchema,
+  TestPushResponseSchema,
+  HealthResponseSchema,
 } from "@autumn/shared";
 import {
   encryptSecret,
@@ -24,6 +49,7 @@ import {
 } from "./crypto";
 import { summarizeRevenue } from "./revenue";
 import { classifyEvent, type PlanInfo } from "./notifications";
+import { assertReadOnlyPath } from "./autumn";
 
 const app = new Hono<{ Bindings: Env; Variables: { user: User } }>();
 const now = () => Date.now();
@@ -167,8 +193,8 @@ function parseBody<T>(schema: z.ZodType<T>, value: unknown): T | null {
   const parsed = schema.safeParse(value);
   return parsed.success ? parsed.data : null;
 }
-function envOf(key: string): "live" | "sandbox" {
-  return key.includes("_test_") ? "sandbox" : "live";
+export function envOf(key: string): "live" | "sandbox" {
+  return key.includes("am_sk_test_") ? "sandbox" : "live";
 }
 function orgView(row: Record<string, unknown>, c: any): Org {
   const base = c.env.PUBLIC_BASE_URL || new URL(c.req.url).origin;
@@ -184,9 +210,15 @@ function orgView(row: Record<string, unknown>, c: any): Org {
   } satisfies Org;
 }
 async function autumn(c: any, key: string, path: string, body: unknown): Promise<unknown> {
+  assertReadOnlyPath(path);
+  const configuredBase = c.env.AUTUMN_API_BASE || "https://api.useautumn.com";
+  const base =
+    configuredBase === "https://api.useautumn.com" && c.env.ALLOW_DEV_LOGIN === "true"
+      ? "http://127.0.0.1:8789"
+      : configuredBase;
   let response: Response;
   try {
-    response = await fetch(`${c.env.AUTUMN_API_BASE || "https://api.useautumn.com"}${path}`, {
+    response = await fetch(`${base}${path}`, {
       method: "POST",
       headers: {
         authorization: `Bearer ${key}`,
@@ -392,7 +424,7 @@ app.use(
   }),
 );
 app.use("/v1/*", requireAuth);
-app.get("/health", (c) => c.json({ status: "ok" }));
+app.get("/health", (c) => c.json({ status: "ok" } satisfies z.infer<typeof HealthResponseSchema>));
 app.post("/v1/auth/dev", async (c) => {
   if (c.env.ALLOW_DEV_LOGIN !== "true") return c.notFound();
   const userId = "dev-user";
@@ -419,7 +451,7 @@ async function issueSession(c: any, userId: string): Promise<Response> {
     displayName: typeof row.display_name === "string" ? row.display_name : null,
     createdAt: Number(row.created_at),
   };
-  return c.json({ token, expiresAt, user });
+  return c.json({ token, expiresAt, user } satisfies z.infer<typeof SessionResponseSchema>);
 }
 async function oauth(
   c: any,
@@ -470,19 +502,13 @@ async function oauth(
   }
 }
 app.post("/v1/auth/google", async (c) => {
-  const body = parseBody(
-    z.object({ idToken: z.string().min(1) }),
-    await c.req.json().catch(() => null),
-  );
+  const body = parseBody(GoogleSignInRequestSchema, await c.req.json().catch(() => null));
   return body
     ? oauth(c, "google", body.idToken, null)
     : fail(c, "invalid_request", "Invalid request");
 });
 app.post("/v1/auth/apple", async (c) => {
-  const body = parseBody(
-    z.object({ identityToken: z.string().min(1), displayName: z.string().nullable() }),
-    await c.req.json().catch(() => null),
-  );
+  const body = parseBody(AppleSignInRequestSchema, await c.req.json().catch(() => null));
   return body
     ? oauth(c, "apple", body.identityToken, body.displayName)
     : fail(c, "invalid_request", "Invalid request");
@@ -493,23 +519,21 @@ app.post("/v1/auth/logout", async (c) => {
     await c.env.DB.prepare("DELETE FROM sessions WHERE token_hash=?")
       .bind(await sha256(h.slice(7)))
       .run();
-  return c.json({ ok: true });
+  return c.json({ ok: true } satisfies z.infer<typeof OkResponseSchema>);
 });
-app.get("/v1/me", (c) => c.json({ user: c.get("user") }));
+app.get("/v1/me", (c) =>
+  c.json({ user: c.get("user") } satisfies z.infer<typeof MeResponseSchema>),
+);
 app.get("/v1/orgs", async (c) => {
   const rows = await c.env.DB.prepare("SELECT * FROM orgs WHERE user_id=? ORDER BY created_at DESC")
     .bind(c.get("user").id)
     .all();
-  return c.json({ orgs: rows.results.map((r) => orgView(r, c)) });
+  return c.json({ orgs: rows.results.map((r) => orgView(r, c)) } satisfies z.infer<
+    typeof OrgListResponseSchema
+  >);
 });
 app.post("/v1/orgs", async (c) => {
-  const body = parseBody(
-    z.object({
-      name: z.string().trim().min(1).max(60),
-      secretKey: z.string().trim().min(8).max(512),
-    }),
-    await c.req.json().catch(() => null),
-  );
+  const body = parseBody(CreateOrgRequestSchema, await c.req.json().catch(() => null));
   if (!body) return fail(c, "invalid_request", "Invalid request");
   try {
     await autumn(c, body.secretKey, "/v1/plans.list", { include_archived: false });
@@ -539,7 +563,9 @@ app.post("/v1/orgs", async (c) => {
       )
       .run();
     const row = await getOrg(c, id);
-    return row ? c.json({ org: orgView(row, c) }) : fail(c, "internal", "Unable to create org");
+    return row
+      ? c.json({ org: orgView(row, c) } satisfies z.infer<typeof OrgResponseSchema>)
+      : fail(c, "internal", "Unable to create org");
   } catch (e) {
     return fail(
       c,
@@ -551,10 +577,7 @@ app.post("/v1/orgs", async (c) => {
   }
 });
 app.patch("/v1/orgs/:id", async (c) => {
-  const body = parseBody(
-    z.object({ name: z.string().trim().min(1).max(60) }),
-    await c.req.json().catch(() => null),
-  );
+  const body = parseBody(RenameOrgRequestSchema, await c.req.json().catch(() => null));
   const row = await getOrg(c, c.req.param("id"));
   if (!row) return fail(c, "not_found", "Organization not found");
   if (!body) return fail(c, "invalid_request", "Invalid request");
@@ -562,13 +585,12 @@ app.patch("/v1/orgs/:id", async (c) => {
     .bind(body.name, now(), String(row.id))
     .run();
   const next = await getOrg(c, String(row.id));
-  return next ? c.json({ org: orgView(next, c) }) : fail(c, "internal", "Unable to update org");
+  return next
+    ? c.json({ org: orgView(next, c) } satisfies z.infer<typeof OrgResponseSchema>)
+    : fail(c, "internal", "Unable to update org");
 });
 app.put("/v1/orgs/:id/key", async (c) => {
-  const body = parseBody(
-    z.object({ secretKey: z.string().trim().min(8).max(512) }),
-    await c.req.json().catch(() => null),
-  );
+  const body = parseBody(ReplaceKeyRequestSchema, await c.req.json().catch(() => null));
   const row = await getOrg(c, c.req.param("id"));
   if (!row) return fail(c, "not_found", "Organization not found");
   if (!body) return fail(c, "invalid_request", "Invalid request");
@@ -586,7 +608,9 @@ app.put("/v1/orgs/:id/key", async (c) => {
       .bind(enc.ciphertext, enc.iv, body.secretKey.slice(-4), envOf(body.secretKey), now(), row.id)
       .run();
     const next = await getOrg(c, String(row.id));
-    return next ? c.json({ org: orgView(next, c) }) : fail(c, "internal", "Unable to update org");
+    return next
+      ? c.json({ org: orgView(next, c) } satisfies z.infer<typeof OrgResponseSchema>)
+      : fail(c, "internal", "Unable to update org");
   } catch (e) {
     return fail(
       c,
@@ -598,10 +622,7 @@ app.put("/v1/orgs/:id/key", async (c) => {
   }
 });
 app.put("/v1/orgs/:id/webhook-secret", async (c) => {
-  const body = parseBody(
-    z.object({ signingSecret: z.string().startsWith("whsec_").min(10) }),
-    await c.req.json().catch(() => null),
-  );
+  const body = parseBody(SetWebhookSecretRequestSchema, await c.req.json().catch(() => null));
   const row = await getOrg(c, c.req.param("id"));
   if (!row) return fail(c, "not_found", "Organization not found");
   if (!body) return fail(c, "invalid_request", "Invalid request");
@@ -617,7 +638,9 @@ app.put("/v1/orgs/:id/webhook-secret", async (c) => {
     .bind(enc.ciphertext, enc.iv, now(), row.id)
     .run();
   const next = await getOrg(c, String(row.id));
-  return next ? c.json({ org: orgView(next, c) }) : fail(c, "internal", "Unable to update org");
+  return next
+    ? c.json({ org: orgView(next, c) } satisfies z.infer<typeof OrgResponseSchema>)
+    : fail(c, "internal", "Unable to update org");
 });
 app.delete("/v1/orgs/:id", async (c) => {
   const row = await getOrg(c, c.req.param("id"));
@@ -625,7 +648,7 @@ app.delete("/v1/orgs/:id", async (c) => {
   await c.env.DB.prepare("DELETE FROM orgs WHERE id=?").bind(row.id).run();
   await c.env.CACHE?.delete(`plans:${row.id}`);
   await c.env.CACHE?.delete(`revenue:${row.id}`);
-  return c.json({ ok: true });
+  return c.json({ ok: true } satisfies z.infer<typeof OkResponseSchema>);
 });
 async function namesFor(c: any, key: string): Promise<Map<string, string>> {
   try {
@@ -665,7 +688,9 @@ app.get("/v1/orgs/:id/plans", async (c) => {
   const row = await getOrg(c, c.req.param("id"));
   if (!row) return fail(c, "not_found", "Organization not found");
   try {
-    return c.json({ plans: [...(await plansFor(c, row))].map(([, p]) => p) });
+    return c.json({ plans: [...(await plansFor(c, row))].map(([, p]) => p) } satisfies z.infer<
+      typeof PlanListResponseSchema
+    >);
   } catch (e) {
     return fail(
       c,
@@ -706,7 +731,11 @@ async function listMapped(
         const p = InvoiceRaw.safeParse(x);
         return p.success ? [invoiceView(p.data, plans, names)] : [];
       });
-    return c.json({ items, nextCursor: raw.next });
+    if (kind === "subscriptions")
+      return c.json(SubscriptionPageSchema.parse({ items, nextCursor: raw.next }));
+    if (kind === "purchases")
+      return c.json(PurchasePageSchema.parse({ items, nextCursor: raw.next }));
+    return c.json(InvoicePageSchema.parse({ items, nextCursor: raw.next }));
   } catch (e) {
     return fail(
       c,
@@ -726,10 +755,13 @@ app.get("/v1/orgs/:id/invoices/:invoiceId", async (c) => {
       e = parseBody(AutumnEnvelope, payload),
       raw = e?.list[0],
       parsed = raw ? InvoiceRaw.safeParse(raw) : null;
-    if (!parsed?.success) return fail(c, "not_found", "Invoice not found");
+    if (!parsed?.success || parsed.data.id !== c.req.param("invoiceId"))
+      return fail(c, "not_found", "Invoice not found");
     const plans = await plansFor(c, row),
       names = await namesFor(c, key);
-    return c.json({ invoice: invoiceView(parsed.data, plans, names) });
+    return c.json({ invoice: invoiceView(parsed.data, plans, names) } satisfies z.infer<
+      typeof InvoiceResponseSchema
+    >);
   } catch (e) {
     return fail(
       c,
@@ -773,17 +805,19 @@ app.get("/v1/orgs/:id/overview", async (c) => {
       now: now(),
       windowDays: 30,
     });
-    return c.json({
-      revenue,
-      activeSubscriptions: subs.filter((x) => x.status === "active" || x.status === "canceling")
-        .length,
-      trialingSubscriptions: subs.filter((x) => x.status === "trialing").length,
-      recentSubscriptions: [...subs].sort((a, b) => b.createdAt - a.createdAt).slice(0, 10),
-      recentOrders: invoices
-        .filter((x) => x.status !== "draft" && x.status !== "void")
-        .sort((a, b) => b.createdAt - a.createdAt)
-        .slice(0, 10),
-    });
+    return c.json(
+      OverviewResponseSchema.parse({
+        revenue,
+        activeSubscriptions: subs.filter((x) => x.status === "active" || x.status === "canceling")
+          .length,
+        trialingSubscriptions: subs.filter((x) => x.status === "trialing").length,
+        recentSubscriptions: [...subs].sort((a, b) => b.createdAt - a.createdAt).slice(0, 10),
+        recentOrders: invoices
+          .filter((x) => x.status !== "draft" && x.status !== "void")
+          .sort((a, b) => b.createdAt - a.createdAt)
+          .slice(0, 10),
+      }),
+    );
   } catch (e) {
     return fail(
       c,
@@ -822,7 +856,9 @@ app.get("/v1/orgs/:id/customers", async (c) => {
           },
         ];
       });
-    return c.json({ items, nextCursor: e?.next_cursor ?? null });
+    return c.json({ items, nextCursor: e?.next_cursor ?? null } satisfies z.infer<
+      typeof CustomerPageSchema
+    >);
   } catch {
     return fail(c, "autumn_unavailable", "Unable to load customers");
   }
@@ -852,21 +888,23 @@ app.get("/v1/orgs/:id/customers/:customerId", async (c) => {
     for (const i of invoices)
       if (i.netPaid)
         value.set(i.netPaid.currency, (value.get(i.netPaid.currency) ?? 0) + i.netPaid.amount);
-    return c.json({
-      customer: {
-        id: raw.id,
-        name: raw.name ?? null,
-        createdAt: raw.created_at,
-        env: raw.env,
-        planNames: subs.filter((s) => s.status === "active" && !s.addOn).map((s) => s.planName),
-        stripeId: raw.stripe_id ?? null,
-        metadata: raw.metadata,
-      },
-      subscriptions: subs,
-      purchases,
-      invoices,
-      lifetimeValue: [...value].map(([currency, amount]) => money(amount, currency)),
-    });
+    return c.json(
+      CustomerDetailSchema.parse({
+        customer: {
+          id: raw.id,
+          name: raw.name ?? null,
+          createdAt: raw.created_at,
+          env: raw.env,
+          planNames: subs.filter((s) => s.status === "active" && !s.addOn).map((s) => s.planName),
+          stripeId: raw.stripe_id ?? null,
+          metadata: raw.metadata,
+        },
+        subscriptions: subs,
+        purchases,
+        invoices,
+        lifetimeValue: [...value].map(([currency, amount]) => money(amount, currency)),
+      }),
+    );
   } catch {
     return fail(c, "autumn_unavailable", "Unable to load customer");
   }
@@ -875,19 +913,13 @@ app.get("/v1/settings/notifications", async (c) => {
   const row = await c.env.DB.prepare("SELECT * FROM notification_settings WHERE user_id=?")
     .bind(c.get("user").id)
     .first();
-  return c.json({ settings: settingsFromRow(row) });
+  return c.json({ settings: settingsFromRow(row) } satisfies z.infer<
+    typeof NotificationSettingsResponseSchema
+  >);
 });
 app.put("/v1/settings/notifications", async (c) => {
   const body = parseBody(
-    z.object({
-      pushEnabled: z.boolean().optional(),
-      purchases: z.boolean().optional(),
-      subscriptions: z.boolean().optional(),
-      trials: z.boolean().optional(),
-      renewals: z.boolean().optional(),
-      cancellations: z.boolean().optional(),
-      excludeFree: z.boolean().optional(),
-    }),
+    UpdateNotificationSettingsRequestSchema,
     await c.req.json().catch(() => null),
   );
   if (!body) return fail(c, "invalid_request", "Invalid request");
@@ -910,7 +942,7 @@ app.put("/v1/settings/notifications", async (c) => {
       now(),
     )
     .run();
-  return c.json({ settings });
+  return c.json({ settings } satisfies z.infer<typeof NotificationSettingsResponseSchema>);
 });
 function settingsFromRow(row: Record<string, unknown> | null): NotificationSettings {
   return row
@@ -926,31 +958,22 @@ function settingsFromRow(row: Record<string, unknown> | null): NotificationSetti
     : DEFAULT_NOTIFICATION_SETTINGS;
 }
 app.post("/v1/devices", async (c) => {
-  const body = parseBody(
-    z.object({
-      expoPushToken: z.string().regex(/^(Exponent|Expo)PushToken\\[.+\\]$/),
-      platform: z.enum(["ios", "android"]),
-    }),
-    await c.req.json().catch(() => null),
-  );
+  const body = parseBody(RegisterDeviceRequestSchema, await c.req.json().catch(() => null));
   if (!body) return fail(c, "invalid_request", "Invalid request");
   await c.env.DB.prepare(
     "INSERT INTO devices(expo_push_token,user_id,platform,updated_at) VALUES(?,?,?,?) ON CONFLICT(expo_push_token) DO UPDATE SET user_id=excluded.user_id,platform=excluded.platform,updated_at=excluded.updated_at",
   )
     .bind(body.expoPushToken, c.get("user").id, body.platform, now())
     .run();
-  return c.json({ ok: true });
+  return c.json({ ok: true } satisfies z.infer<typeof OkResponseSchema>);
 });
 app.delete("/v1/devices", async (c) => {
-  const body = parseBody(
-    z.object({ expoPushToken: z.string() }),
-    await c.req.json().catch(() => null),
-  );
+  const body = parseBody(UnregisterDeviceRequestSchema, await c.req.json().catch(() => null));
   if (!body) return fail(c, "invalid_request", "Invalid request");
   await c.env.DB.prepare("DELETE FROM devices WHERE expo_push_token=? AND user_id=?")
     .bind(body.expoPushToken, c.get("user").id)
     .run();
-  return c.json({ ok: true });
+  return c.json({ ok: true } satisfies z.infer<typeof OkResponseSchema>);
 });
 app.post("/v1/orgs/:id/test-push", async (c) => {
   const row = await getOrg(c, c.req.param("id"));
@@ -975,7 +998,7 @@ app.post("/v1/orgs/:id/test-push", async (c) => {
     priority: "high",
   }));
   await sendPush(c, messages);
-  return c.json({ sent: messages.length });
+  return c.json({ sent: messages.length } satisfies z.infer<typeof TestPushResponseSchema>);
 });
 async function sendPush(c: any, messages: unknown[]): Promise<void> {
   if (!messages.length) return;
@@ -1018,7 +1041,7 @@ app.post("/webhooks/autumn/:webhookId", async (c) => {
     )
       .bind(row.id, id)
       .first();
-    if (duplicate) return c.json({ ok: true });
+    if (duplicate) return c.json({ ok: true } satisfies z.infer<typeof OkResponseSchema>);
     await c.env.DB.prepare("INSERT INTO webhook_events(org_id,event_id,received_at) VALUES(?,?,?)")
       .bind(row.id, id, now())
       .run();
@@ -1026,29 +1049,42 @@ app.post("/webhooks/autumn/:webhookId", async (c) => {
       .bind(now(), row.id)
       .run();
     const parsed = z.object({ type: z.string(), data: z.unknown() }).safeParse(JSON.parse(body));
-    if (!parsed.success) return c.json({ ok: true });
-    if (parsed.data.type !== "billing.updated") return c.json({ ok: true });
+    if (!parsed.success) return c.json({ ok: true } satisfies z.infer<typeof OkResponseSchema>);
+    if (parsed.data.type !== "billing.updated" && parsed.data.type !== "invoice.finalized")
+      return c.json({ ok: true } satisfies z.infer<typeof OkResponseSchema>);
     const eventData = z
       .object({
         customer_id: z.string(),
-        plan_changes: z.array(
-          z.object({
-            action: z.string(),
-            subscription: z
-              .object({
-                plan_id: z.string(),
-                status: z.string(),
-                canceled_at: z.number().nullable().optional(),
-                trial_ends_at: z.number().nullable().optional(),
-              })
-              .optional(),
-            purchase: z.object({ plan_id: z.string(), status: z.string() }).optional(),
-          }),
-        ),
+        plan_changes: z
+          .array(
+            z.object({
+              action: z.string(),
+              subscription: z
+                .object({
+                  plan_id: z.string(),
+                  status: z.string(),
+                  canceled_at: z.number().nullable().optional(),
+                  trial_ends_at: z.number().nullable().optional(),
+                })
+                .optional(),
+              purchase: z.object({ plan_id: z.string(), status: z.string() }).optional(),
+            }),
+          )
+          .default([]),
         tags: z.array(z.string()).optional(),
+        invoice: z
+          .object({
+            id: z.string(),
+            plan_ids: z.array(z.string()).optional(),
+            started_at: z.number().optional(),
+            created_at: z.number().optional(),
+            one_off: z.boolean().optional(),
+          })
+          .optional(),
+        previous_attributes: z.object({ canceled_at: z.number().nullable().optional() }).optional(),
       })
       .safeParse(parsed.data.data);
-    if (!eventData.success) return c.json({ ok: true });
+    if (!eventData.success) return c.json({ ok: true } satisfies z.infer<typeof OkResponseSchema>);
     const plans = await plansFor(c, row),
       planInfo = new Map<string, PlanInfo>(
         [...plans].map(([id, p]) => [
@@ -1060,7 +1096,7 @@ app.post("/webhooks/autumn/:webhookId", async (c) => {
         .bind(row.user_id)
         .first(),
       notifications = classifyEvent({
-        event: { type: "billing.updated", data: eventData.data },
+        event: { type: parsed.data.type, data: eventData.data },
         plans: planInfo,
         settings: settingsFromRow(settingsRow),
         now: now(),
@@ -1084,7 +1120,7 @@ app.post("/webhooks/autumn/:webhookId", async (c) => {
       })),
     );
     c.executionCtx.waitUntil(sendPush(c, messages));
-    return c.json({ ok: true });
+    return c.json({ ok: true } satisfies z.infer<typeof OkResponseSchema>);
   } catch {
     return fail(c, "invalid_signature", "Invalid signature");
   }

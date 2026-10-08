@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { encryptSecret, decryptSecret, importEncryptionKey } from "../crypto";
 import { summarizeRevenue } from "../revenue";
 import { classifyEvent } from "../notifications";
+import { envOf } from "../index";
 import { DEFAULT_NOTIFICATION_SETTINGS } from "@autumn/shared";
 
 describe("crypto", () => {
@@ -9,10 +10,19 @@ describe("crypto", () => {
     const raw = btoa(String.fromCharCode(...crypto.getRandomValues(new Uint8Array(32))));
     const key = await importEncryptionKey(raw);
     const encrypted = await encryptSecret({ value: "am_sk_test_demo_key", key, aad: "u:o:key" });
+    const encryptedAgain = await encryptSecret({ value: "am_sk_test_demo_key", key, aad: "u:o:key" });
+    expect(encrypted.iv).not.toBe(encryptedAgain.iv);
     await expect(decryptSecret({ ...encrypted, key, aad: "u:o:key" })).resolves.toBe(
       "am_sk_test_demo_key",
     );
     await expect(decryptSecret({ ...encrypted, key, aad: "u:o:other" })).rejects.toThrow();
+  });
+});
+describe("key environment", () => {
+  it("recognizes explicit Autumn key environments", () => {
+    expect(envOf("am_sk_live_demo")).toBe("live");
+    expect(envOf("am_sk_test_demo")).toBe("sandbox");
+    expect(envOf("other_key")).toBe("live");
   });
 });
 describe("revenue", () => {

@@ -1,7 +1,58 @@
-CREATE TABLE users (id TEXT PRIMARY KEY, provider TEXT NOT NULL, provider_subject TEXT NOT NULL, display_name TEXT, created_at INTEGER NOT NULL, UNIQUE(provider, provider_subject));
-CREATE TABLE sessions (token_hash TEXT PRIMARY KEY, user_id TEXT NOT NULL, created_at INTEGER NOT NULL, expires_at INTEGER NOT NULL);
-CREATE TABLE orgs (id TEXT PRIMARY KEY, user_id TEXT NOT NULL, name TEXT NOT NULL, key_ciphertext TEXT NOT NULL, key_iv TEXT NOT NULL, key_version INTEGER NOT NULL, key_suffix TEXT NOT NULL, key_env TEXT NOT NULL, webhook_id TEXT NOT NULL UNIQUE, webhook_secret_ciphertext TEXT, webhook_secret_iv TEXT, last_webhook_at INTEGER, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL);
-CREATE TABLE devices (expo_push_token TEXT PRIMARY KEY, user_id TEXT NOT NULL, platform TEXT NOT NULL, updated_at INTEGER NOT NULL);
-CREATE TABLE notification_settings (user_id TEXT PRIMARY KEY, push_enabled INTEGER NOT NULL, purchases INTEGER NOT NULL, subscriptions INTEGER NOT NULL, trials INTEGER NOT NULL, renewals INTEGER NOT NULL, cancellations INTEGER NOT NULL, exclude_free INTEGER NOT NULL, updated_at INTEGER NOT NULL);
-CREATE TABLE webhook_events (org_id TEXT NOT NULL, event_id TEXT NOT NULL, received_at INTEGER NOT NULL, PRIMARY KEY(org_id,event_id));
-CREATE INDEX sessions_user_idx ON sessions(user_id); CREATE INDEX orgs_user_idx ON orgs(user_id); CREATE INDEX devices_user_idx ON devices(user_id);
+CREATE TABLE users (
+  id TEXT PRIMARY KEY,
+  provider TEXT NOT NULL,
+  provider_subject TEXT NOT NULL,
+  display_name TEXT,
+  created_at INTEGER NOT NULL,
+  UNIQUE(provider, provider_subject)
+);
+CREATE TABLE sessions (
+  token_hash TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  created_at INTEGER NOT NULL,
+  expires_at INTEGER NOT NULL
+);
+CREATE TABLE orgs (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  name TEXT NOT NULL,
+  key_ciphertext TEXT NOT NULL,
+  key_iv TEXT NOT NULL,
+  key_version INTEGER NOT NULL,
+  key_suffix TEXT NOT NULL,
+  key_env TEXT NOT NULL,
+  webhook_id TEXT NOT NULL UNIQUE,
+  webhook_secret_ciphertext TEXT,
+  webhook_secret_iv TEXT,
+  last_webhook_at INTEGER,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+CREATE TABLE devices (
+  expo_push_token TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  platform TEXT NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+CREATE TABLE notification_settings (
+  user_id TEXT PRIMARY KEY,
+  push_enabled INTEGER NOT NULL,
+  purchases INTEGER NOT NULL,
+  subscriptions INTEGER NOT NULL,
+  trials INTEGER NOT NULL,
+  renewals INTEGER NOT NULL,
+  cancellations INTEGER NOT NULL,
+  exclude_free INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+CREATE TABLE webhook_events (
+  org_id TEXT NOT NULL,
+  event_id TEXT NOT NULL,
+  received_at INTEGER NOT NULL,
+  PRIMARY KEY(org_id, event_id)
+);
+CREATE INDEX sessions_user_idx ON sessions(user_id);
+CREATE INDEX sessions_expiry_idx ON sessions(expires_at);
+CREATE INDEX orgs_user_idx ON orgs(user_id);
+CREATE INDEX devices_user_idx ON devices(user_id);
+CREATE INDEX webhook_events_org_idx ON webhook_events(org_id);
