@@ -130,5 +130,5 @@ In the app open Settings → your org → Webhook setup and follow the four step
 
 ## Repository notes
 
-- Everything here is local; there is no remote and nothing has been deployed.
+- The Worker has not been deployed anywhere yet, and no OAuth clients, EAS project or push credentials exist. See the setup steps above.
 - No email addresses appear in code, tests, fixtures or docs. The Worker never reads or stores the email claim from Google or Apple tokens.
