@@ -4,6 +4,8 @@ An unofficial mobile dashboard for [Autumn](https://useautumn.com) billing, in t
 
 This project is not made, endorsed or supported by Autumn or Polar.
 
+It is self-hosted. There is no shared backend: you deploy the small Worker in `apps/server` to your own Cloudflare account (the free plan is enough) and build the app pointed at it. Your Autumn keys, customers and push tokens never leave infrastructure you control.
+
 | Workspace         | What it is                                                                                                                                                                                                 |
 | ----------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `apps/mobile`     | Expo SDK 57 app (Expo Router, TypeScript strict). iOS and Android; web is a local dev surface only.                                                                                                        |
@@ -88,9 +90,9 @@ The Worker has a dev sign-in and the repo ships a mock Autumn, so you can click 
 
 Push notifications, Google and Apple sign-in need a development build on a real device; they don't run in a browser or Expo Go.
 
-## Setup before a device test or deploy
+## Self-hosting
 
-Nothing below has been done. Each step needs your accounts.
+You run your own copy. Each step uses your own Cloudflare, Google, Apple and Expo accounts; nothing here depends on the maintainers.
 
 ### 1. Cloudflare (Worker)
 
@@ -130,5 +132,5 @@ In the app open Settings → your org → Webhook setup and follow the four step
 
 ## Repository notes
 
-- The Worker has not been deployed anywhere yet, and no OAuth clients, EAS project or push credentials exist. See the setup steps above.
+- There is no hosted instance. Deploy your own as described in [Self-hosting](#self-hosting).
 - No email addresses appear in code, tests, fixtures or docs. The Worker never reads or stores the email claim from Google or Apple tokens.
